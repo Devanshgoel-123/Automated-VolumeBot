@@ -1,0 +1,1 @@
+ALTER TABLE "daily_stats" ADD COLUMN "exchangeName" text NOT NULL;
