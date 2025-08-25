@@ -13,7 +13,8 @@ import { TRADE_PAIR, ORDER_BOOK_SIZE, LOGX_MIN_SIZE } from "../utils/constants";
 import { KUCOIN_SIZE_POINTS, KUCOIN_PRICE_POINTS } from "../utils/constants";
 import { Budget, Trade } from "../utils/types";
 import { InsertOrder } from "../db/orders";
-import { setBotRunning } from "./MainBot";
+import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
+import { LOGX_TICK_SIZE } from "../utils/constants";
 config();
 
 /**
@@ -119,7 +120,8 @@ export const PlaceBatchOrder = async (
           tracker.dailySpent += tradeCost;
           tracker.monthlySpent += tradeCost;
           tracker.dailyTrades++;
-          tracker.dailyVolume+=Number(orderItem.size)*Number(orderItem.price);
+          tracker.dailyVolume +=
+            Number(orderItem.size) * Number(orderItem.price);
           const storeOrder = await InsertOrder({
             clientOid: orderItem.clientOid,
             symbol: orderItem.symbol,
@@ -143,9 +145,10 @@ export const PlaceBatchOrder = async (
       }
     );
     return success;
-  } catch (error) {
-    console.error("Error placing limit order", error);
-    return null;
+  } catch (error: any) {
+    console.error("Error placing limit order", JSON.stringify(error));
+
+    return false;
   }
 };
 
@@ -184,9 +187,8 @@ export const GetOrderBook = async () => {
  * Fetches the best {bid, ask} prices for the LOGX-USDT pair
  * @returns The best order book prices
  */
-export const FetchBestOrderBookPrices = async () => {
+export const FetchBestOrderBookPrices = async (client:MarketAPI) => {
   try {
-    const client = await InitializeKuCoinClientMarket();
     if (!client) {
       throw new Error("Failed to initialize KuCoin client");
     }
@@ -205,8 +207,12 @@ export const FetchBestOrderBookPrices = async () => {
   }
 };
 
-export const CanExecuteTrade = async (trade: OrderListElement, KuCoinTracker: Budget) => {
-  const result = await FetchBestOrderBookPrices();
+export const CanExecuteTrade = async (
+  trade: OrderListElement,
+  KuCoinTracker: Budget,
+  client: MarketAPI
+) => {
+  const result = await FetchBestOrderBookPrices(client);
   if (result === null) {
     console.log("Failed to fetch best order book prices");
     return false;
@@ -223,8 +229,7 @@ export const CanExecuteTrade = async (trade: OrderListElement, KuCoinTracker: Bu
     KuCoinTracker.monthlySpent + tradeCost <= KuCoinTracker.monthlyLimit;
   if (!canExecute) {
     console.log(`Budget limit reached, skipping trade ${trade.size}`);
-    setBotRunning(false);
-    return false
+    return false;
     // await sendBudgetAlert();
   }
   return true;
@@ -237,10 +242,10 @@ export const CanExecuteTrade = async (trade: OrderListElement, KuCoinTracker: Bu
  * @returns True if the trade is valid, false otherwise
  */
 export const ValidateTrade = async (logxSize: number, buyPrice: number) => {
-    console.log("logxSize", logxSize);
-    console.log("buyPrice", buyPrice);
-    console.log("SYMBOL_DETAILS.minOrderSize", SYMBOL_DETAILS.minOrderSize);
-    console.log("SYMBOL_DETAILS.minFunds", SYMBOL_DETAILS.minFunds);
+  console.log("logxSize", logxSize);
+  console.log("buyPrice", buyPrice);
+  console.log("SYMBOL_DETAILS.minOrderSize", SYMBOL_DETAILS.minOrderSize);
+  console.log("SYMBOL_DETAILS.minFunds", SYMBOL_DETAILS.minFunds);
   if (
     logxSize < SYMBOL_DETAILS.minOrderSize ||
     logxSize * buyPrice < SYMBOL_DETAILS.minFunds
@@ -291,4 +296,98 @@ export const CheckOrderSize = async (size: number, symbol: string) => {
     return false;
   }
   return true;
+};
+
+
+/**
+ * Process each trade pair
+ * @param tradePair - The trade pair to process
+ * @param client - The KuCoin client
+ * @param tracker - The tracker for the trade
+ * @returns The result of the trade
+ */
+export const ProcessEachTradePair = async (
+  tradePair: Trade[],
+  client: OrderAPI,
+  tracker: Budget,
+  isBotRunning: boolean,
+  marketClient: MarketAPI
+) => {
+  console.log("The Budget Status is", tracker);
+  if (!isBotRunning) {
+    console.log("Bot is stopped, skipping trade pair execution");
+    return;
+  }
+  try {
+    console.log("Executing trade pair", tradePair);
+    const book = await FetchBestOrderBookPrices(marketClient);
+    if (!book) {
+      console.error("⚠️ Failed to fetch order book, skipping trade");
+      return;
+    }
+    // Target Volume is distributed into multiple sub orders volume
+    const usdtSize = tradePair[0].size;
+    const bestBid = parseFloat(book.bid);
+    const buyPrice = bestBid + LOGX_TICK_SIZE;
+    const sellPrice = buyPrice;
+
+    //Amount of LOGX tokens to buy and sell
+    const logxSize =
+      Math.round(usdtSize / buyPrice / SYMBOL_DETAILS.sizeIncrement) *
+      SYMBOL_DETAILS.sizeIncrement;
+    const orderList: OrderListElement[] = [];
+    const isValid = await ValidateTrade(logxSize, buyPrice);
+    console.log("isValid", isValid);
+    if (!isValid) {
+      console.log("Trade is invalid, skipping");
+      return;
+    }
+    const buyOrder = await CreateLimitOrderStruct(
+      logxSize,
+      buyPrice,
+      BatchAddOrdersOrderList.SideEnum.BUY,
+      TRADE_PAIR
+    );
+
+    const sellOrder = await CreateLimitOrderStruct(
+      logxSize,
+      sellPrice,
+      BatchAddOrdersOrderList.SideEnum.SELL,
+      TRADE_PAIR
+    );
+
+    if (!buyOrder || !sellOrder) {
+      console.error("Failed to create orders, skipping");
+      return;
+    }
+    if (
+      (await CanExecuteTrade(buyOrder, tracker, marketClient)) &&
+      (await CanExecuteTrade(sellOrder, tracker, marketClient))
+    ) {
+      console.log("Maker and Taker Trades are valid, creating orders");
+    } else {
+      console.error("Maker and Taker Trades are not valid, skipping");
+      return;
+    }
+    orderList.push(buyOrder);
+    orderList.push(sellOrder);
+
+    if (orderList.length === 2) {
+      console.log("Placing batched orders", orderList);
+      // 3. Place both together as a batch
+      const result = await PlaceBatchOrder(orderList, client, tracker);
+      if (result) {
+        console.log("✅ Successfully placed batched orders");
+      } else {
+        console.error("Failed to place batched orders");
+        return;
+      }
+    } else {
+      console.warn(
+        `⚠️ Skipping trade pair - only ${orderList.length} valid orders created`
+      );
+    }
+  } catch (err: any) {
+    console.error("Error executing trade:", JSON.stringify(err.data));
+  }
 };

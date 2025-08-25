@@ -1,13 +1,12 @@
 import "reflect-metadata";
-import cron from "node-cron";
 import express from "express";
 const app = express();
-import { StartKuCoinVolumeBot } from "./KuCoinService/MainBot";
-import { setBotRunning } from "./KuCoinService/MainBot";
-
-
-const KuCoinVolumeBot = StartKuCoinVolumeBot();
-console.log(KuCoinVolumeBot);
+import { ExchangeFactory } from "./Exchanges/exchange";
+import { KUCOIN_EXCHANGE_NAME } from "./utils/constants";
+import { VolumeBot } from "./Bot/VolumeBot";
+const kuCoinAdapter = ExchangeFactory.getAdapter(KUCOIN_EXCHANGE_NAME);
+const bot= new VolumeBot(kuCoinAdapter);
+bot.start();
 // cron.schedule('5 * * * *', async () => {
 //     // resetDailyCounter(KuCoinTracker);
 //     // await GetOrderBook();
@@ -20,7 +19,6 @@ app.get("/", (req, res) => {
 
 app.post("/terminate", (req, res) => {
   try {
-    setBotRunning(false);
     res.status(200).send("Bot terminated");
   } catch (err) {
     console.error("Error terminating bot", err);
