@@ -11,7 +11,7 @@ import { TRADE_PAIR, LOGX_TICK_SIZE } from "../utils/constants";
 import { OrderListElement } from "../utils/types";
 import { SYMBOL_DETAILS } from "../utils/constants";
 import { OrderAPI } from "kucoin-universal-sdk/dist/generate/spot/order";
-import { InitializeKuCoinClientSpot } from "./kucoinService";
+import { InitializeKuCoinClientSpot, synchronizeServerTime } from "./kucoinService";
 import { ValidateTrade } from "./KuCoinOrderFunction";
 import cron from "node-cron";
 import { UpdateDailyStats, GetTodaysStats } from "../db/stats";
@@ -42,6 +42,10 @@ export const getBotRunning = (): boolean => {
 export const StartKuCoinVolumeBot = async () => {
   console.log("Starting KuCoin Volume Bot...");
   isBotRunning = true; // Set signal to true when starting
+  
+  // Synchronize with KuCoin server time to prevent timestamp errors
+  await synchronizeServerTime();
+  
   const { trades, exchange } = generateDailySchedule();
   var KuCoinTracker: Budget = {
     dailySpent: 0,
@@ -76,7 +80,7 @@ export const StartKuCoinVolumeBot = async () => {
         return;
       }
       await ProcessEachTradePair(tradePair, client, KuCoinTracker);
-    }, delay);
+    }, delay-100000);
   }
   cron.schedule(
     "0 0 * * *",

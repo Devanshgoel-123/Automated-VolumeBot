@@ -8,6 +8,48 @@ import {
 } from 'kucoin-universal-sdk';
 import { KUCOIN_API_KEY, KUCOIN_API_SECRET, KUCOIN_API_PASSPHRASE } from "../utils/constants";
 
+// Add server time synchronization
+let serverTimeOffset = 0;
+
+/**
+ * Synchronize with KuCoin server time to prevent timestamp errors
+ * @returns The server time offset in milliseconds
+ */
+export const synchronizeServerTime = async () => {
+    try {
+        const client = await InitializeKuCoinClientMarket();
+        if (!client) {
+            console.warn("Failed to initialize client for time sync");
+            return;
+        }
+        
+        const startTime = Date.now();
+        // Use server time endpoint to get accurate server time
+        const response = await fetch('https://api.kucoin.com/api/v1/timestamp');
+        const endTime = Date.now();
+        
+        if (response.ok) {
+            const data = await response.json();
+            const serverTime = data.data; // KuCoin returns timestamp in milliseconds
+            const networkDelay = (endTime - startTime) / 2;
+            const localTime = startTime + networkDelay;
+            
+            serverTimeOffset = serverTime - localTime;
+            console.log(`Server time synchronized. Offset: ${serverTimeOffset}ms`);
+        }
+    } catch (error) {
+        console.error("Failed to synchronize server time:", error);
+        serverTimeOffset = 0; // Reset to 0 if sync fails
+    }
+};
+
+/**
+ * Get synchronized timestamp
+ * @returns Current timestamp synchronized with KuCoin server
+ */
+export const getSynchronizedTimestamp = (): number => {
+    return Date.now() + serverTimeOffset;
+};
 
 /**
  * Initialize the KuCoin client for market Data
@@ -80,5 +122,3 @@ export const InitializeKuCoinClientSpot= async()=>{
         return null;
     }
 }
-
-

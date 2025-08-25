@@ -1,7 +1,7 @@
 import { OrderListElement } from "../utils/types";
 import { config } from "dotenv";
 import { KUCOIN_FEE, SYMBOL_DETAILS } from "../utils/constants";
-import { InitializeKuCoinClientMarket } from "./kucoinService";
+import { InitializeKuCoinClientMarket, getSynchronizedTimestamp } from "./kucoinService";
 import { Spot } from "kucoin-universal-sdk";
 import { KUCOIN_EXCHANGE_NAME } from "../utils/constants";
 import {
@@ -61,7 +61,7 @@ export const CreateLimitOrderStruct = async (
       Math.round(price / SYMBOL_DETAILS.priceIncrement) *
       SYMBOL_DETAILS.priceIncrement;
     const formattedSize = Math.round(size / 0.1) * 0.1;
-    const currentTime = new Date().getTime();
+    const currentTime = getSynchronizedTimestamp();
     const clientOid = `${currentTime}_${side}_maker`;
     const orderList: OrderListElement = {
       clientOid,
