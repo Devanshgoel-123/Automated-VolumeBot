@@ -1,7 +1,11 @@
 import { KUCOIN_EXCHANGE_NAME } from "../utils/constants";
-import { Budget, DailySchedule, OrderListElement, Trade } from "../utils/types";
+import { Budget, OrderListElement, Trade } from "../utils/types";
+import { TelegramService } from "../TelegramBot/index";
 import { KuCoinAdapter } from "./KuCoin/KuCoinAdapter";
+// import { GateAdapter } from "./Gate/GateAdapter";
+// import { MexcAdapter } from "./MexC/MexcAdapter";
 export interface ExchangeAdapter {
+  exchangeName: string;
   initializeClients(): Promise<void>;
 
   createBatchOrder(
@@ -22,7 +26,7 @@ export interface ExchangeAdapter {
 
   cancelOrder(orderId: string): Promise<boolean>;
 
-  processTrades(tracker: Budget, isBotRunning: boolean): Promise<void>;
+  processTrades(tracker: Budget, isBotRunning: boolean, telegramService?: TelegramService): Promise<void>;
 
   generateSchedule(): { trades: Trade[][]; exchange: string };
 }
@@ -32,6 +36,10 @@ export class ExchangeFactory {
     switch (name) {
       case KUCOIN_EXCHANGE_NAME:
         return new KuCoinAdapter();
+      // case "GATE":
+      //   return new GateAdapter();
+      // case "MEXC":
+      //   return new MexcAdapter();
       default:
         throw new Error(`Exchange ${name} not supported`);
     }

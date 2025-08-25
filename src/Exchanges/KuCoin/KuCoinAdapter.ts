@@ -15,10 +15,17 @@ import { generateDailySchedule } from "../../utils/functions";
 import { OrderAPI } from "kucoin-universal-sdk/dist/generate/spot/order";
 import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot/order";
+import { TelegramService } from "../../TelegramBot/index";
+import { KUCOIN_EXCHANGE_NAME } from "../../utils/constants";
 
 export class KuCoinAdapter implements ExchangeAdapter {
   private marketClient!: MarketAPI | null;
   private orderClient!: OrderAPI | null;
+  exchangeName: string;
+
+  constructor() {
+    this.exchangeName = KUCOIN_EXCHANGE_NAME;
+  }
 
   async initializeClients(): Promise<void> {
     this.marketClient = await InitializeKuCoinClientMarket();
@@ -63,17 +70,21 @@ export class KuCoinAdapter implements ExchangeAdapter {
     return true;
   }
 
-  async processTrades(tracker: Budget, isBotRunning: boolean): Promise<void> {
-    console.log("Started prcoessing trades");
+  async processTrades(tracker: Budget, isBotRunning: boolean, telegramService?: TelegramService): Promise<void> {
+    console.log("Started processing trades");
     const marketClient = this.marketClient;
     if (marketClient === null || marketClient === undefined) {
       console.log("Error 1");
-      throw new Error("Error initializing the marekt clinet KUCoin");
+      throw new Error("Error initializing the market client KUCoin");
     }
     const spotClient = this.orderClient;
     if (spotClient === null || spotClient === undefined) {
       console.log("Error 2");
       throw new Error("The spot client is not initialized returning null");
+    }
+
+    if (telegramService) {
+      await telegramService.sendAlert(`🔄 KuCoin: Starting to process ${tracker.schedule.trades.length} trade pairs`);
     }
 
     for (const tradePair of tracker.schedule.trades) {
@@ -91,7 +102,8 @@ export class KuCoinAdapter implements ExchangeAdapter {
           spotClient,
           tracker,
           isBotRunning,
-          marketClient
+          marketClient,
+          telegramService
         );
       }, delay - 100000);
     }

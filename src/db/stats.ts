@@ -1,14 +1,8 @@
 import { DailyStatsTable } from "./schema";
 import { db } from "./db";
 import { and, eq, sql } from "drizzle-orm";
+import { DailyStats } from "../utils/types";
 
-interface DailyStats{
-    date:string;
-    totalVolume:number;
-    totalTrades:number;
-    totalFees:number;
-    exchangeName:string;
-}
 
 /**
  * Update the daily stats

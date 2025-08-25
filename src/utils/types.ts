@@ -2,8 +2,8 @@ import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot
 export interface OrderListElement {
   clientOid: string;
   symbol: string;
-  type: BatchAddOrdersOrderList.TypeEnum;
-  side: BatchAddOrdersOrderList.SideEnum;
+  type: BatchAddOrdersOrderList.TypeEnum | string;
+  side: BatchAddOrdersOrderList.SideEnum | string;
   price: string;
   size: string;
   selfTradePrevention: string;
@@ -12,9 +12,9 @@ export interface OrderListElement {
 export interface Budget {
   dailySpent: number;
   dailyVolume: number;
-  dailyTrades:number;
-  monthlySpent:number;
-  monthlyTrades:number;
+  dailyTrades: number;
+  monthlySpent: number;
+  monthlyTrades: number;
   dailyLimit: number;
   monthlyLimit: number;
   schedule: DailySchedule;
@@ -30,4 +30,12 @@ export interface Trade {
   size: number;
   type: BatchAddOrdersOrderList.SideEnum;
   orderType: BatchAddOrdersOrderList.TypeEnum;
+}
+
+export interface DailyStats{
+  date:string;
+  totalVolume:number;
+  totalTrades:number;
+  totalFees:number;
+  exchangeName:string;
 }
