@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+    volumebot-dev:
+        build:
+            context: .
+            dockerfile: Dockerfile.dev
+        ports:
+            - '3000:3000'
+            - '9229:9229' # Node.js debug port
+        environment:
+            - NODE_ENV=development
+            - DEBUG=*
+        env_file:
+            - .env
+        restart: unless-stopped
+        volumes:
+            - ./src:/app/src
+            - ./logs:/app/logs
+            - /app/node_modules
+        networks:
+            - volumebot-dev-network
+        command: npm run dev
+
+networks:
+    volumebot-dev-network:
+        driver: bridge

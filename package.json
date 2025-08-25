@@ -4,7 +4,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsc -b && node dist/index.js"
+    "start": "tsc -b && node dist/index.js",
+    "dev": "nodemon --exec tsx src/index.ts",
+    "build": "tsc -b",
+    "docker:build": "docker build -t logx-volumebot .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env logx-volumebot",
+    "docker:compose": "docker-compose up -d",
+    "docker:compose:dev": "docker-compose -f docker-compose.dev.yml up -d"
   },
   "repository": {
     "type": "git",
