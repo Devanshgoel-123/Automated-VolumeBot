@@ -47,11 +47,7 @@ export class KuCoinAdapter implements ExchangeAdapter {
     side: "BUY" | "SELL",
     symbol: string
   ): Promise<OrderListElement | null> {
-    const sideEnum =
-      side === "BUY"
-        ? BatchAddOrdersOrderList.SideEnum.BUY
-        : BatchAddOrdersOrderList.SideEnum.SELL;
-    return await CreateLimitOrderStruct(size, price, sideEnum, symbol);
+    return await CreateLimitOrderStruct(size, price, side, symbol);
   }
 
   async fetchBestPrices() {

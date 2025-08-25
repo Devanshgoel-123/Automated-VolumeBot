@@ -2,8 +2,8 @@ import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot
 export interface OrderListElement {
   clientOid: string;
   symbol: string;
-  type: BatchAddOrdersOrderList.TypeEnum | string;
-  side: BatchAddOrdersOrderList.SideEnum | string;
+  type: BatchAddOrdersOrderList.TypeEnum | "LIMIT";
+  side: "BUY" | "SELL";
   price: string;
   size: string;
   selfTradePrevention: string;
@@ -28,7 +28,7 @@ export interface DailySchedule {
 export interface Trade {
   time: Date;
   size: number;
-  type: BatchAddOrdersOrderList.SideEnum;
+  type: "BUY" | "SELL";
   orderType: BatchAddOrdersOrderList.TypeEnum;
 }
 

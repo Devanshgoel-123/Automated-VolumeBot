@@ -11,17 +11,9 @@ import { InitializeMexcService } from "./MexCService/MexcService";
 // Initialize Telegram service
 const telegramService = new TelegramService();
 
-// Example: Initialize KuCoin bot with Telegram integration
 const kuCoinAdapter = ExchangeFactory.getAdapter(KUCOIN_EXCHANGE_NAME);
 const kuCoinBot = new VolumeBot(kuCoinAdapter, telegramService);
 
-// Example: Initialize Gate.io bot with Telegram integration
-// const gateAdapter = ExchangeFactory.getAdapter("GATE");
-// const gateBot = new VolumeBot(gateAdapter, telegramService);
-
-// Example: Initialize MexC bot with Telegram integration
-// const mexcAdapter = ExchangeFactory.getAdapter("MEXC");
-// const mexcBot = new VolumeBot(mexcAdapter, telegramService);
 
 // Start the bot (uncomment to run)
 // kuCoinBot.start();

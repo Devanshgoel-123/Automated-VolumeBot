@@ -12,8 +12,8 @@ export const CreateLimitOrderStruct = async (
   try {
     const orderParams: OrderListElement = {
       symbol: symbol,
-      side: side.toUpperCase(),
-      type: "LIMIT",
+      side: side,
+      type: "LIMIT" as const,
       size: size.toString(),
       price: price.toString(),
       clientOid: `M-${side.charAt(0).toUpperCase()}-${Date.now()}`,

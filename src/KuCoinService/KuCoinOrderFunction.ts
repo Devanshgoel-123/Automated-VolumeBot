@@ -13,8 +13,8 @@ import { TRADE_PAIR, ORDER_BOOK_SIZE, LOGX_MIN_SIZE } from "../utils/constants";
 import { KUCOIN_SIZE_POINTS, KUCOIN_PRICE_POINTS } from "../utils/constants";
 import { Budget, Trade } from "../utils/types";
 import { InsertOrder } from "../db/orders";
-import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { LOGX_TICK_SIZE } from "../utils/constants";
+import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { TelegramService } from "../TelegramBot/index";
 config();
 
@@ -40,11 +40,13 @@ export const validateOrderSize = (size: number, price: number): boolean => {
 export const CreateLimitOrderStruct = async (
   size: number,
   price: number,
-  side: BatchAddOrdersOrderList.SideEnum,
+  side: "BUY" | "SELL",
   symbol: string
 ) => {
   try {
     const roundedSize =
+      Math.round(size / SYMBOL_DETAILS_KUCOIN.sizeIncrement) *
+      SYMBOL_DETAILS_KUCOIN.sizeIncrement;
       Math.round(size / SYMBOL_DETAILS_KUCOIN.sizeIncrement) *
       SYMBOL_DETAILS_KUCOIN.sizeIncrement;
 
@@ -108,7 +110,10 @@ export const PlaceBatchOrder = async (
           clientOid: order.clientOid,
           symbol: order.symbol,
           type: BatchAddOrdersOrderList.TypeEnum.LIMIT,
-          side: order.side as BatchAddOrdersOrderList.SideEnum,
+          side:
+            order.side === "BUY"
+              ? BatchAddOrdersOrderList.SideEnum.BUY
+              : BatchAddOrdersOrderList.SideEnum.SELL,
           price: order.price,
           size: order.size,
           cancelAfter: 60,
@@ -204,7 +209,7 @@ export const GetOrderBook = async () => {
  * Fetches the best {bid, ask} prices for the LOGX-USDT pair
  * @returns The best order book prices
  */
-export const FetchBestOrderBookPrices = async (client:MarketAPI) => {
+export const FetchBestOrderBookPrices = async (client: MarketAPI) => {
   try {
     if (!client) {
       throw new Error("Failed to initialize KuCoin client");
@@ -236,18 +241,12 @@ export const CanExecuteTrade = async (
   }
   const { ask } = result;
   const tradeCost = Number(trade.size) * Number(ask) * KUCOIN_FEE; // Maker fee (0.06%)
-  console.log("tradeCost", tradeCost);
-  console.log("KuCoinTracker.dailySpent", KuCoinTracker.dailySpent);
-  console.log("KuCoinTracker.dailyLimit", KuCoinTracker.dailyLimit);
-  console.log("KuCoinTracker.monthlySpent", KuCoinTracker.monthlySpent);
-  console.log("KuCoinTracker.monthlyLimit", KuCoinTracker.monthlyLimit);
   const canExecute =
     KuCoinTracker.dailySpent + tradeCost <= KuCoinTracker.dailyLimit &&
     KuCoinTracker.monthlySpent + tradeCost <= KuCoinTracker.monthlyLimit;
   if (!canExecute) {
     console.log(`Budget limit reached, skipping trade ${trade.size}`);
     return false;
-    // await sendBudgetAlert();
   }
   return true;
 };
@@ -259,10 +258,6 @@ export const CanExecuteTrade = async (
  * @returns True if the trade is valid, false otherwise
  */
 export const ValidateTrade = async (logxSize: number, buyPrice: number) => {
-  console.log("logxSize", logxSize);
-  console.log("buyPrice", buyPrice);
-  console.log("SYMBOL_DETAILS.minOrderSize", SYMBOL_DETAILS_KUCOIN.minOrderSize);
-  console.log("SYMBOL_DETAILS.minFunds", SYMBOL_DETAILS_KUCOIN.minFunds);
   if (
     logxSize < SYMBOL_DETAILS_KUCOIN.minOrderSize ||
     logxSize * buyPrice < SYMBOL_DETAILS_KUCOIN.minFunds
@@ -314,6 +309,7 @@ export const CheckOrderSize = async (size: number, symbol: string) => {
   }
   return true;
 };
+
 
 
 /**
@@ -374,14 +370,14 @@ export const ProcessEachTradePair = async (
     const buyOrder = await CreateLimitOrderStruct(
       logxSize,
       buyPrice,
-      BatchAddOrdersOrderList.SideEnum.BUY,
+      "BUY",
       TRADE_PAIR
     );
 
     const sellOrder = await CreateLimitOrderStruct(
       logxSize,
       sellPrice,
-      BatchAddOrdersOrderList.SideEnum.SELL,
+      "SELL",
       TRADE_PAIR
     );
 

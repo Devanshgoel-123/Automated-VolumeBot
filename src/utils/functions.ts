@@ -1,21 +1,21 @@
 import { KUCOIN_TARGET_VOLUME } from "./constants";
 import { Budget } from "./types";
 import { Trade } from "./types";
-import { BatchAddOrdersOrderList } from 'kucoin-universal-sdk/dist/generate/spot/order';
+import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot/order";
 /**
  * Reset the daily counter and log the previous day's data
  * @param budget - The budget object
  */
-export const ResetDailyCounter=async (budget: Budget): Promise<void> => {
+export const ResetDailyCounter = async (budget: Budget): Promise<void> => {
   console.log("Resetting daily counter");
-  const {trades}=generateDailySchedule();
+  const { trades } = generateDailySchedule();
   budget.dailySpent = 0;
   budget.dailyVolume = 0;
   budget.dailyTrades = 0;
   budget.schedule.trades = trades;
-}
+};
 
-export const generateDailySchedule=()=>{
+export const generateDailySchedule = () => {
   const numPairs = Math.floor(Math.random() * (580 - 575 + 1)) + 580; // Random 575-580 pairs
   const totalValue = KUCOIN_TARGET_VOLUME;
   const trades: Trade[][] = [];
@@ -27,9 +27,13 @@ export const generateDailySchedule=()=>{
   }
 
   const selectedIntervals = intervals.slice(0, numPairs).sort((a, b) => a - b);
-  const tradeUsdtSizes = Array(numPairs).fill(0).map(() => Math.random() * (totalValue / numPairs) * 2);
+  const tradeUsdtSizes = Array(numPairs)
+    .fill(0)
+    .map(() => Math.random() * (totalValue / numPairs) * 2);
   const sumUsdt = tradeUsdtSizes.reduce((a, b) => a + b, 0);
-  const normalizedUsdtSizes = tradeUsdtSizes.map(size => Number(((size / sumUsdt) * totalValue).toFixed(2)));
+  const normalizedUsdtSizes = tradeUsdtSizes.map((size) =>
+    Number(((size / sumUsdt) * totalValue).toFixed(2))
+  );
   const normalizedUsdtValues = normalizedUsdtSizes.reduce((a, b) => a + b, 0);
 
   selectedIntervals.forEach((intervalStart, index) => {
@@ -42,20 +46,26 @@ export const generateDailySchedule=()=>{
 
     const firstTrade: Trade = {
       time,
-      size:usdtValue,
-      type: isLimitBuy ? BatchAddOrdersOrderList.SideEnum.BUY : BatchAddOrdersOrderList.SideEnum.SELL,
+      size: usdtValue,
+      type: isLimitBuy ? "BUY" : "SELL",
       orderType: BatchAddOrdersOrderList.TypeEnum.LIMIT,
     };
 
     const compensatingTrade: Trade = {
       time,
-      size:usdtValue,
-      type: isLimitBuy ? BatchAddOrdersOrderList.SideEnum.SELL : BatchAddOrdersOrderList.SideEnum.BUY,
+      size: usdtValue,
+      type: isLimitBuy ? "SELL" : "BUY",
       orderType: BatchAddOrdersOrderList.TypeEnum.LIMIT,
     };
 
     trades.push([firstTrade, compensatingTrade]);
   });
 
-  return { exchange: 'KuCoin', trades, totalValue, sumUsdt, normalizedUsdtValues };
-}
+  return {
+    exchange: "KuCoin",
+    trades,
+    totalValue,
+    sumUsdt,
+    normalizedUsdtValues,
+  };
+};

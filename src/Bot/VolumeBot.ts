@@ -32,8 +32,8 @@ export class VolumeBot {
   }
 
   async start() {
-    console.log("🚀 Starting Volume Bot...");
-    await this.telegramService.sendAlert("🚀 Volume Bot is starting up!");
+    console.log("Starting Volume Bot...");
+    await this.telegramService.sendAlert("Volume Bot is starting up!");
     
     try {
       await this.adapter.initializeClients();
