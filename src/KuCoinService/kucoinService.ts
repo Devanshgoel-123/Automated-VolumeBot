@@ -1,22 +1,17 @@
-import { Budget } from "../utils/types";
 import {
     ClientOptionBuilder,
     DefaultClient,
     GlobalApiEndpoint,
     GlobalBrokerApiEndpoint,
     GlobalFuturesApiEndpoint,
-    Spot,
     TransportOptionBuilder
 } from 'kucoin-universal-sdk';
-import { FetchBestOrderBookPrices } from "./KuCoinOrderFunction";
-import { Trade } from "../utils/types";
-import { generateDailySchedule } from "../utils/functions";
 import { KUCOIN_API_KEY, KUCOIN_API_SECRET, KUCOIN_API_PASSPHRASE } from "../utils/constants";
 
 
 /**
- * Initialize the KuCoin client
- * @returns The spot market api
+ * Initialize the KuCoin client for market Data
+ * @returns The market api
  */
 export const InitializeKuCoinClientMarket= async()=>{
     try{
@@ -51,7 +46,7 @@ export const InitializeKuCoinClientMarket= async()=>{
 }
 
 /**
- * Initialize the KuCoin client
+ * Initialize the KuCoin client for order Data
  * @returns The spot market api
  */
 export const InitializeKuCoinClientSpot= async()=>{
@@ -86,19 +81,4 @@ export const InitializeKuCoinClientSpot= async()=>{
     }
 }
 
-export const CanExecuteTrade=async(trade:Trade, KuCoinTracker:Budget)=>{
-   const result=await FetchBestOrderBookPrices();
-   if(result === null){
-    console.error("Failed to fetch best order book prices");
-    return false;
-   }
-   const {ask}=result;
-   const tradeCost = trade.size * Number(ask) * 0.0006; // Maker fee (0.06%)
-  const canExecute = KuCoinTracker.dailySpent + tradeCost <= KuCoinTracker.dailyLimit &&
-                     KuCoinTracker.monthlySpent + tradeCost <= KuCoinTracker.monthlyLimit;
-  if (!canExecute) {
-    console.log(`Budget limit reached, skipping trade ${trade.size}`);
-    // await sendBudgetAlert();
-  }
-  
-}
+

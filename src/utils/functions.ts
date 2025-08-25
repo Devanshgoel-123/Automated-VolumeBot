@@ -1,15 +1,18 @@
 import { KUCOIN_TARGET_VOLUME } from "./constants";
 import { Budget } from "./types";
-import { DailySchedule, Trade } from "./types";
+import { Trade } from "./types";
 import { BatchAddOrdersOrderList } from 'kucoin-universal-sdk/dist/generate/spot/order';
 /**
  * Reset the daily counter and log the previous day's data
  * @param budget - The budget object
  */
 export const ResetDailyCounter=async (budget: Budget): Promise<void> => {
-  const previousDayData = { dailySpent: budget.dailySpent, date: new Date() };
-  console.log("Resetting daily counter", previousDayData);
+  console.log("Resetting daily counter");
+  const {trades}=generateDailySchedule();
   budget.dailySpent = 0;
+  budget.dailyVolume = 0;
+  budget.dailyTrades = 0;
+  budget.schedule.trades = trades;
 }
 
 export const generateDailySchedule=()=>{

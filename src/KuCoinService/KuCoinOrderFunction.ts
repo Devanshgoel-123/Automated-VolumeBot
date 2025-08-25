@@ -1,28 +1,20 @@
 import { OrderListElement } from "../utils/types";
 import { config } from "dotenv";
-import { SYMBOL_DETAILS } from "../utils/constants";
-import {
-  InitializeKuCoinClientMarket,
-  InitializeKuCoinClientSpot,
-} from "./kucoinService";
+import { KUCOIN_FEE, SYMBOL_DETAILS } from "../utils/constants";
+import { InitializeKuCoinClientMarket } from "./kucoinService";
 import { Spot } from "kucoin-universal-sdk";
-import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot/order";
+import { KUCOIN_EXCHANGE_NAME } from "../utils/constants";
 import {
-  TRADE_PAIR,
-  ORDER_BOOK_SIZE,
-  LOGX_TICK_SIZE,
-  LOGX_MIN_SIZE,
-} from "../utils/constants";
+  BatchAddOrdersData,
+  BatchAddOrdersOrderList,
+  OrderAPI,
+} from "kucoin-universal-sdk/dist/generate/spot/order";
+import { TRADE_PAIR, ORDER_BOOK_SIZE, LOGX_MIN_SIZE } from "../utils/constants";
+import { KUCOIN_SIZE_POINTS, KUCOIN_PRICE_POINTS } from "../utils/constants";
+import { Budget, Trade } from "../utils/types";
+import { InsertOrder } from "../db/orders";
+import { setBotRunning } from "./MainBot";
 config();
-
-/**
- * Round price to valid tick size
- * @param price - The price to round
- * @returns The rounded price
- */
-export const roundToTickSize = (price: number): number => {
-  return Math.round(price / LOGX_TICK_SIZE) * LOGX_TICK_SIZE;
-};
 
 /**
  * Validate order size meets minimum requirements
@@ -53,21 +45,18 @@ export const CreateLimitOrderStruct = async (
     const roundedSize =
       Math.round(size / SYMBOL_DETAILS.sizeIncrement) *
       SYMBOL_DETAILS.sizeIncrement;
-    if (roundedSize < SYMBOL_DETAILS.minOrderSize) {
-      console.error(
-        `Size ${roundedSize} is below minimum ${SYMBOL_DETAILS.minOrderSize} for ${symbol}`
-      );
+
+    // Check if the order size is above the minimum order size
+    const isValidSize = await CheckOrderSize(roundedSize, symbol);
+    if (!isValidSize) {
       return null;
     }
-    const notional = roundedSize * price;
-    if (notional < SYMBOL_DETAILS.minFunds) {
-      console.error(
-        `Notional value ${notional.toFixed(3)} is below minimum ${
-          SYMBOL_DETAILS.minFunds
-        } for ${symbol}`
-      );
+    // Check if the notional value is above the minimum funds
+    const isValidNotional = await CheckNotionalValue(roundedSize, price);
+    if (!isValidNotional) {
       return null;
     }
+    // Round the price to the nearest price increment
     const roundedPrice =
       Math.round(price / SYMBOL_DETAILS.priceIncrement) *
       SYMBOL_DETAILS.priceIncrement;
@@ -79,8 +68,8 @@ export const CreateLimitOrderStruct = async (
       symbol,
       type: BatchAddOrdersOrderList.TypeEnum.LIMIT,
       side: side,
-      price: roundedPrice.toFixed(5),
-      size: formattedSize.toFixed(1),
+      price: roundedPrice.toFixed(KUCOIN_PRICE_POINTS),
+      size: formattedSize.toFixed(KUCOIN_SIZE_POINTS),
       selfTradePrevention: "NO_STP",
     };
     return orderList;
@@ -95,9 +84,13 @@ export const CreateLimitOrderStruct = async (
  * @param orderList - The list of orders to place
  * @returns The result of the batch order placement
  */
-export const PlaceBatchOrder = async (orderList: OrderListElement[]) => {
+export const PlaceBatchOrder = async (
+  orderList: OrderListElement[],
+  client: OrderAPI,
+  tracker: Budget
+) => {
   try {
-    const client = await InitializeKuCoinClientSpot();
+    let success = false;
     if (!client) {
       throw new Error("Failed to initialize KuCoin client");
     }
@@ -110,19 +103,46 @@ export const PlaceBatchOrder = async (orderList: OrderListElement[]) => {
           side: order.side as BatchAddOrdersOrderList.SideEnum,
           price: order.price,
           size: order.size,
-          cancelAfter: 60, //cancel after 60 seconds
+          cancelAfter: 60,
         })
       ),
     });
-    console.log("Request", request);
-    client
-      .batchAddOrders(request)
-      .then((result) => {
-        console.log("The result is", result);
-      })
-      .catch((err) => {
-        console.error("fail to place batch order", err);
-      });
+    const batchOrderResult = await client.batchAddOrders(request);
+    console.log("Batch order result", batchOrderResult.data);
+    batchOrderResult.data.map(
+      async (item: BatchAddOrdersData, index: number) => {
+        if (item.success) {
+          success = true;
+          const orderItem = orderList[index];
+          const tradeCost =
+            Number(orderItem.size) * Number(orderItem.price) * KUCOIN_FEE;
+          tracker.dailySpent += tradeCost;
+          tracker.monthlySpent += tradeCost;
+          tracker.dailyTrades++;
+          tracker.dailyVolume+=Number(orderItem.size)*Number(orderItem.price);
+          const storeOrder = await InsertOrder({
+            clientOid: orderItem.clientOid,
+            symbol: orderItem.symbol,
+            type: orderItem.type.toString() as string,
+            side: orderItem.side.toString() as string,
+            price: orderItem.price,
+            size: orderItem.size,
+            exchangeName: KUCOIN_EXCHANGE_NAME,
+          });
+          if (storeOrder) {
+            console.log(
+              "Order placed and inserted into the database successfully",
+              storeOrder
+            );
+          } else {
+            console.error("Failed to store order", item);
+          }
+        } else {
+          success = false;
+        }
+      }
+    );
+    return success;
   } catch (error) {
     console.error("Error placing limit order", error);
     return null;
@@ -183,4 +203,92 @@ export const FetchBestOrderBookPrices = async () => {
     console.error("Error fetching best order book prices", error);
     return null;
   }
+};
+
+export const CanExecuteTrade = async (trade: OrderListElement, KuCoinTracker: Budget) => {
+  const result = await FetchBestOrderBookPrices();
+  if (result === null) {
+    console.log("Failed to fetch best order book prices");
+    return false;
+  }
+  const { ask } = result;
+  const tradeCost = Number(trade.size) * Number(ask) * KUCOIN_FEE; // Maker fee (0.06%)
+  console.log("tradeCost", tradeCost);
+  console.log("KuCoinTracker.dailySpent", KuCoinTracker.dailySpent);
+  console.log("KuCoinTracker.dailyLimit", KuCoinTracker.dailyLimit);
+  console.log("KuCoinTracker.monthlySpent", KuCoinTracker.monthlySpent);
+  console.log("KuCoinTracker.monthlyLimit", KuCoinTracker.monthlyLimit);
+  const canExecute =
+    KuCoinTracker.dailySpent + tradeCost <= KuCoinTracker.dailyLimit &&
+    KuCoinTracker.monthlySpent + tradeCost <= KuCoinTracker.monthlyLimit;
+  if (!canExecute) {
+    console.log(`Budget limit reached, skipping trade ${trade.size}`);
+    setBotRunning(false);
+    return false
+    // await sendBudgetAlert();
+  }
+  return true;
+};
+
+/**
+ * Validate the trade size and price
+ * @param logxSize - The size of the trade
+ * @param buyPrice - The price of the trade
+ * @returns True if the trade is valid, false otherwise
+ */
+export const ValidateTrade = async (logxSize: number, buyPrice: number) => {
+    console.log("logxSize", logxSize);
+    console.log("buyPrice", buyPrice);
+    console.log("SYMBOL_DETAILS.minOrderSize", SYMBOL_DETAILS.minOrderSize);
+    console.log("SYMBOL_DETAILS.minFunds", SYMBOL_DETAILS.minFunds);
+  if (
+    logxSize < SYMBOL_DETAILS.minOrderSize ||
+    logxSize * buyPrice < SYMBOL_DETAILS.minFunds
+  ) {
+    console.log(
+      `Invalid size ${logxSize} or notional ${
+        logxSize * buyPrice
+      } for ${TRADE_PAIR}`
+    );
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Check if the notional value is above the minimum funds
+ * @param logxSize - The size of the trade
+ * @param buyPrice - The price of the trade
+ * @returns True if the notional value is above the minimum funds, false otherwise
+ */
+export const CheckNotionalValue = async (
+  logxSize: number,
+  buyPrice: number
+) => {
+  const notional = logxSize * buyPrice;
+  if (notional < SYMBOL_DETAILS.minFunds) {
+    console.log(
+      `Notional value ${notional.toFixed(3)} is below minimum ${
+        SYMBOL_DETAILS.minFunds
+      } for ${TRADE_PAIR}`
+    );
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Check if the order size is above the minimum order size
+ * @param size - The size of the order
+ * @param symbol - The symbol of the order
+ * @returns True if the order size is above the minimum order size, false otherwise
+ */
+export const CheckOrderSize = async (size: number, symbol: string) => {
+  if (size < SYMBOL_DETAILS.minOrderSize) {
+    console.log(
+      `Size ${size} is below minimum ${SYMBOL_DETAILS.minOrderSize} for ${symbol}`
+    );
+    return false;
+  }
+  return true;
 };

@@ -11,7 +11,10 @@ export interface OrderListElement {
 
 export interface Budget {
   dailySpent: number;
-  monthlySpent: number;
+  dailyVolume: number;
+  dailyTrades:number;
+  monthlySpent:number;
+  monthlyTrades:number;
   dailyLimit: number;
   monthlyLimit: number;
   schedule: DailySchedule;
