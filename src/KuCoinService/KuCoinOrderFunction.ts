@@ -62,7 +62,12 @@ export const CreateLimitOrderStruct = async (
       SYMBOL_DETAILS.priceIncrement;
     const formattedSize = Math.round(size / 0.1) * 0.1;
     const currentTime = getSynchronizedTimestamp();
+    console.log(`Generated timestamp: ${currentTime}, Date: ${new Date(currentTime).toISOString()}`);
     const clientOid = `${currentTime}_${side}_maker`;
+    if (currentTime > Date.now() + 10000) { // More than 10 seconds in future
+        console.error(`CRITICAL: Future timestamp detected! ${currentTime} vs current ${Date.now()}`);
+        throw new Error(`Invalid future timestamp: ${currentTime}`);
+    }
     const orderList: OrderListElement = {
       clientOid,
       symbol,

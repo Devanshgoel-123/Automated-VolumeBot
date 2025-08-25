@@ -44,11 +44,27 @@ export const synchronizeServerTime = async () => {
 };
 
 /**
- * Get synchronized timestamp
+ * Get synchronized timestamp with validation
  * @returns Current timestamp synchronized with KuCoin server
  */
 export const getSynchronizedTimestamp = (): number => {
-    return Date.now() + serverTimeOffset;
+    const timestamp = Date.now() + serverTimeOffset;
+    
+    // Validation: Ensure timestamp is not in the future beyond reasonable bounds
+    const currentTime = Date.now();
+    const maxAllowedOffset = 5000; // 5 seconds maximum offset
+    
+    if (timestamp > currentTime + maxAllowedOffset) {
+        console.warn(`Timestamp too far in future: ${timestamp}, using current time: ${currentTime}`);
+        return currentTime;
+    }
+    
+    if (timestamp < currentTime - 300000) { // 5 minutes in the past
+        console.warn(`Timestamp too far in past: ${timestamp}, using current time: ${currentTime}`);
+        return currentTime;
+    }
+    
+    return timestamp;
 };
 
 /**
