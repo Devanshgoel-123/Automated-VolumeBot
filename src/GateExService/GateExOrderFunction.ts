@@ -10,6 +10,7 @@ import { Order } from "gate-api";
 import { Budget } from "../utils/types";
 import { TelegramService } from "../TelegramBot";
 import { Trade } from "../utils/types";
+import { BatchOrder } from "gate-api";
 /**
  * Create a limit order
  * @param size - The size of the order
@@ -25,7 +26,6 @@ export const CreateLimitOrderStruct = async (
   symbol: string
 ) => {
   try {
-    console.log("Creating limit order struct", size, price, side, symbol);
     // Check if the order size is above the minimum order size
     const isValidSize = await CheckOrderSize(size, symbol);
     if (!isValidSize) {
@@ -72,32 +72,42 @@ export const PlaceBatchOrder = async (
   try {
     let success = false;
     if (!client) {
+
       throw new Error("Failed to initialize GateX client");
     }
     const orderListGateX: Order[] = orderList.map((order,index) => {
-      const type =
-        order.type === "LIMIT" ? Order.Type.Limit : Order.Type.Market;
       const side = order.side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
       return {
         currencyPair: SYMBOL_DETAILS_GATE.symbol,
         side: side,
-        type: type,
+        type: Order.Type.Limit,
         amount: Number(order.size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
         price: Number(order.price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
         text: `t-${order.clientOid}`,
-        timeInForce:Order.TimeInForce.Gtc,
-        stpId: index === 0 ? 1 : 2,
+        timeInForce: index === 0 ? Order.TimeInForce.Gtc : Order.TimeInForce.Gtc,
+        postOnly: index === 0 ? true : false,
       };
     });
     console.log("Order list", orderListGateX);
     const batchOrderResult = await client.createBatchOrders(orderListGateX, {
-      xGateExptime: undefined,
+      xGateExptime: (new Date().getTime() + 60000).toString(),
     });
-    console.log("Batch order result", batchOrderResult.response.data);
-    console.log("Batch order result body is", batchOrderResult.body);
-    return true;
+    
+    if(batchOrderResult.response.status===200){
+      const order=orderList[0];
+      const volume=Number(order.price)*Number(order.size)
+      tracker.dailyVolume+=volume;
+      tracker.dailyTrades+=orderList.length;
+      tracker.dailySpent+=volume*GATE_FEE;
+      success=true;
+    }else{
+      success=false;
+      await telegramService?.sendErrorAlert("Failed to place batch order on Gatex");
+    }
+    return success
   } catch (error) {
     console.error("Error placing batch order on Gatex", error);
+    await telegramService?.sendErrorAlert("Failed to place batch order on Gatex");
     return false;
   }
 };
@@ -144,8 +154,8 @@ export const FetchBestOrderBookPrices = async (
 
     const ask = result.body.asks[0];
     const bid = result.body.bids[0];
-    console.log("The ask is", ask);
-    console.log("The bid is", bid);
+    // console.log("The ask is", ask);
+    // console.log("The bid is", bid);
     return {
       ask: ask[0],
       bid: bid[0],
@@ -233,14 +243,11 @@ export const ProcessEachTradePair = async (
   isBotRunning: boolean,
   telegramService?: TelegramService
 ) => {
-  console.log("The Budget Status is", tracker);
-
   if (!isBotRunning) {
     console.log("Bot is stopped, skipping trade pair execution");
     return;
   }
   try {
-    console.log("Executing trade pair", tradePair);
     const book = await FetchBestOrderBookPrices(client);
     if (!book) {
       console.error("⚠️ Failed to fetch order book, skipping trade");
@@ -255,18 +262,21 @@ export const ProcessEachTradePair = async (
     // Target Volume is distributed into multiple sub orders volume
     const usdtSize = tradePair[0].size;
     const bestBid = parseFloat(book.bid);
-    const buyPrice = bestBid + GATEX_LOGX_TICK_SIZE;
-    const sellPrice = buyPrice;
-    console.log("The best bid is", bestBid);
-    console.log("The buy price is", buyPrice);
-    console.log("The sell price is", sellPrice);
+    const bestAsk = parseFloat(book.ask);
+    const midPrice=Number(((bestBid + bestAsk)/2).toFixed(SYMBOL_DETAILS_GATE.pricePrecision));
+    const buyPrice = Number((midPrice + GATEX_LOGX_TICK_SIZE).toFixed(SYMBOL_DETAILS_GATE.pricePrecision));
+    const sellPrice = Number(buyPrice);
+    // console.log("The best bid is", bestBid);
+    // console.log("The best ask is", bestAsk);
+    // console.log("The price is", buyPrice);
+    // console.log("The mid price is", midPrice);
     //Amount of LOGX tokens to buy and sell
     const logxSize = Math.round(usdtSize / buyPrice);
     const orderList: OrderListElement[] = [];
     const isValid = await ValidateTrade(logxSize, buyPrice);
-    console.log("isValid", isValid);
+    // console.log("isValid", isValid);
     if (!isValid) {
-      console.log("Trade is invalid, skipping");
+      // console.log("Trade is invalid, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
           `KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`
@@ -290,7 +300,7 @@ export const ProcessEachTradePair = async (
     );
 
     if (!buyOrder || !sellOrder) {
-      console.error("Failed to create orders, skipping");
+      // console.error("Failed to create orders, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
           "KuCoin: Failed to create buy/sell orders"
@@ -305,7 +315,6 @@ export const ProcessEachTradePair = async (
     ) {
       console.log("Maker and Taker Trades are valid, creating orders");
     } else {
-      console.error("Maker and Taker Trades are not valid, skipping");
       if (telegramService) {
         await telegramService.sendBudgetAlert(tracker);
       }

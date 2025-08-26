@@ -6,7 +6,7 @@ import { TelegramService } from "../src/TelegramBot/index";
  * Example: How to integrate Telegram service with multiple exchanges
  */
 async function runTelegramIntegrationExample() {
-  console.log("🚀 Starting Telegram Integration Example...");
+  console.log("Starting Telegram Integration Example...");
 
   // Initialize Telegram service
   const telegramService = new TelegramService();
@@ -33,36 +33,40 @@ async function runTelegramIntegrationExample() {
     // Send status update
     await telegramService.sendAlert("✅ All bots initialized successfully!");
 
-    // Example: Send different types of notifications
-    await telegramService.sendExchangeStatus("KuCoin", "Connected and ready", true);
-    await telegramService.sendMarketData("KuCoin", "LOGX-USDT", "0.1500", "0.1505", 0.33);
-    await telegramService.sendTradeNotification("KuCoin", "LOGX-USDT", "BUY", 100, 0.1500, 15.00);
+    // await telegramService.sendMarketData(
+    //   "KuCoin",
+    //   "LOGX-USDT",
+    //   "0.1500",
+    //   "0.1505",
+    //   0.33
+    // );
 
     // Example: Budget alert
     const sampleBudget = {
-      dailySpent: 15.50,
-      dailyVolume: 150.00,
+      dailySpent: 15.5,
+      dailyVolume: 150.0,
       dailyTrades: 45,
-      monthlySpent: 450.00,
+      monthlySpent: 450.0,
       monthlyTrades: 1200,
       dailyLimit: 16.67,
       monthlyLimit: 500,
-      schedule: { trades: [], exchange: "KuCoin" }
+      schedule: { trades: [], exchange: "KuCoin" },
     };
     await telegramService.sendBudgetAlert(sampleBudget);
 
     // Example: Daily stats
-    await telegramService.sendDailyStats({
-      totalTrades: 48,
-      totalVolume: 720.00,
-      totalFees: 0.43
-    });
+    // await telegramService.sendDailyStats({
+    //   totalTrades: 48,
+    //   totalVolume: 720.0,
+    //   totalFees: 0.43,
+    // });
 
     console.log("✅ Telegram integration example completed successfully!");
-
   } catch (error) {
     console.error("❌ Error in Telegram integration example:", error);
-    await telegramService.sendErrorAlert(`Integration example failed: ${error}`);
+    await telegramService.sendErrorAlert(
+      `Integration example failed: ${error}`
+    );
   }
 }
 
@@ -84,10 +88,12 @@ async function runMultipleBotsExample() {
         const adapter = ExchangeFactory.getAdapter(exchange);
         const bot = new VolumeBot(adapter, telegramService);
         bots.push(bot);
-        
+
         await telegramService.sendAlert(`✅ ${exchange} bot initialized`);
       } catch (error) {
-        await telegramService.sendErrorAlert(`Failed to initialize ${exchange} bot: ${error}`);
+        await telegramService.sendErrorAlert(
+          `Failed to initialize ${exchange} bot: ${error}`
+        );
       }
     }
 
@@ -96,11 +102,14 @@ async function runMultipleBotsExample() {
     //   await bot.start();
     // }
 
-    await telegramService.sendAlert(`🤖 All ${bots.length} bots ready for deployment!`);
-
+    await telegramService.sendAlert(
+      `🤖 All ${bots.length} bots ready for deployment!`
+    );
   } catch (error) {
     console.error("❌ Error in multiple bots example:", error);
-    await telegramService.sendErrorAlert(`Multiple bots example failed: ${error}`);
+    await telegramService.sendErrorAlert(
+      `Multiple bots example failed: ${error}`
+    );
   }
 }
 
@@ -114,7 +123,8 @@ async function customNotificationExample() {
 
   try {
     // Custom trading session notification
-    await telegramService.sendAlert(`
+    await telegramService.sendAlert(
+      `
 🎯 <b>Trading Session Started</b>
 
 ⏰ <b>Time:</b> ${new Date().toLocaleString()}
@@ -122,10 +132,12 @@ async function customNotificationExample() {
 📊 <b>Status:</b> Active
 
 <i>Ready to execute trades! 🚀</i>
-    `.trim());
+    `.trim()
+    );
 
     // Custom market analysis
-    await telegramService.sendAlert(`
+    await telegramService.sendAlert(
+      `
 📈 <b>Market Analysis</b>
 
 🏢 <b>Exchange:</b> KuCoin
@@ -136,10 +148,12 @@ async function customNotificationExample() {
 
 💡 <b>Analysis:</b> Strong upward momentum with increasing volume
 🎯 <b>Recommendation:</b> Continue with current strategy
-    `.trim());
+    `.trim()
+    );
 
     // Custom error with context
-    await telegramService.sendErrorAlert(`
+    await telegramService.sendErrorAlert(
+      `
 🚨 <b>API Rate Limit Exceeded</b>
 
 🏢 <b>Exchange:</b> KuCoin
@@ -149,13 +163,15 @@ async function customNotificationExample() {
 📊 <b>Limit:</b> 50 requests/minute
 
 💡 <b>Action:</b> Implementing exponential backoff
-    `.trim());
+    `.trim()
+    );
 
     console.log("✅ Custom notifications example completed!");
-
   } catch (error) {
     console.error("❌ Error in custom notifications example:", error);
-    await telegramService.sendErrorAlert(`Custom notifications example failed: ${error}`);
+    await telegramService.sendErrorAlert(
+      `Custom notifications example failed: ${error}`
+    );
   }
 }
 
@@ -165,12 +181,12 @@ async function main() {
 
   await runTelegramIntegrationExample();
   console.log("\n" + "=".repeat(50) + "\n");
-  
+
   await runMultipleBotsExample();
   console.log("\n" + "=".repeat(50) + "\n");
-  
+
   await customNotificationExample();
-  
+
   console.log("\n🎉 All examples completed successfully!");
 }
 
@@ -178,7 +194,7 @@ async function main() {
 export {
   runTelegramIntegrationExample,
   runMultipleBotsExample,
-  customNotificationExample
+  customNotificationExample,
 };
 
 // Run if this file is executed directly

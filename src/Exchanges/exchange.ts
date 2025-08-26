@@ -7,8 +7,10 @@ import { GateXAdapter } from "./Gate/GateAdapter";
 
 export interface ExchangeAdapter {
   exchangeName: string;
+  isBotRunning: boolean;
   initializeClients(): Promise<void>;
-
+  initializeStats(): Promise<void>;
+  tracker: Budget;
   createBatchOrder(
     orders: OrderListElement[],
     tracker: Budget
@@ -27,9 +29,11 @@ export interface ExchangeAdapter {
 
   cancelOrder(orderId: string): Promise<boolean>;
 
-  processTrades(tracker: Budget, isBotRunning: boolean, telegramService?: TelegramService): Promise<void>;
+  processTrades(telegramService?: TelegramService): Promise<void>;
 
   generateSchedule(): { trades: Trade[][]; exchange: string };
+
+  stopBot(): Promise<void>;
 }
 
 export class ExchangeFactory {

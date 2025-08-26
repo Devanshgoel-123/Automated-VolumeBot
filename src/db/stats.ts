@@ -39,7 +39,12 @@ export const UpdateDailyStats=async({
     }
 }
 
-
+/**
+ * Get the today's stats
+ * @param date - The date to get the stats for
+ * @param exchangeName - The exchange name to get the stats for
+ * @returns The today's stats
+ */
 export const GetTodaysStats=async(date:string,exchangeName:string)=>{
     try{
         const stats = await db
@@ -52,8 +57,8 @@ export const GetTodaysStats=async(date:string,exchangeName:string)=>{
       .from(DailyStatsTable)
       .where(and(eq(DailyStatsTable.date, date),eq(DailyStatsTable.exchangeName,exchangeName)))
       .groupBy(DailyStatsTable.exchangeName);
-
-    return stats;
+    const statsDaily=stats[0];
+    return statsDaily;
     }catch(error){
         console.error("Error getting today's stats", error);
     }

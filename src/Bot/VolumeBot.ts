@@ -1,34 +1,17 @@
-// src/bot/VolumeBot.ts
-import { Budget, OrderListElement, Trade } from "../utils/types";
 import { ExchangeAdapter } from "../Exchanges/exchange";
 import { TelegramService } from "../TelegramBot/index";
 import cron from "node-cron";
 import { ResetDailyCounter } from "../utils/functions";
 
-let isBotRunning = true;
-
-export const setBotRunning = (value: boolean) => {
-  isBotRunning = value;
-};
 
 export class VolumeBot {
-  private adapter: ExchangeAdapter;
-  private tracker: Budget;
+  public adapter: ExchangeAdapter;
+  
   private telegramService: TelegramService;
 
   constructor(adapter: ExchangeAdapter, telegramService: TelegramService) {
     this.adapter = adapter;
     this.telegramService = telegramService;
-    this.tracker = {
-      dailySpent: 0,
-      dailyVolume: 0,
-      dailyTrades: 0,
-      monthlySpent: 0,
-      monthlyTrades: 0,
-      dailyLimit: 16.67,
-      monthlyLimit: 500,
-      schedule: { trades: [], exchange: "" },
-    };
   }
 
   async start() {
@@ -36,23 +19,24 @@ export class VolumeBot {
     await this.telegramService.sendAlert("Volume Bot is starting up!");
     
     try {
+      await this.adapter.initializeStats();
       await this.adapter.initializeClients();
-      this.tracker.schedule = this.adapter.generateSchedule();
+     
       
-      await this.telegramService.sendAlert(`📊 Bot initialized with ${this.tracker.schedule.trades.length} trade pairs scheduled`);
+      await this.telegramService.sendAlert(`📊 Bot initialized with ${this.adapter.tracker.schedule.trades.length} trade pairs scheduled`);
       
-      await this.adapter.processTrades(this.tracker, isBotRunning, this.telegramService);
+      await this.adapter.processTrades(this.telegramService);
 
       cron.schedule("0 0 * * *", async () => {
         console.log("Resetting daily counter");
         await this.telegramService.sendDailyStats({
-          totalTrades: this.tracker.dailyTrades,
-          totalVolume: this.tracker.dailyVolume,
-          totalFees: this.tracker.dailySpent,
-          date: new Date().getDate().toString(),
+          totalTrades: this.adapter.tracker.dailyTrades,
+          totalVolume: this.adapter.tracker.dailyVolume,
+          totalFees: this.adapter.tracker.dailySpent,
+          date: new Date().toString(),
           exchangeName: this.adapter.exchangeName
         });
-        ResetDailyCounter(this.tracker);
+        ResetDailyCounter(this.adapter.tracker);
         await this.telegramService.sendAlert("🔄 Daily counters reset - new trading day started!");
       });
     } catch (error) {
@@ -60,4 +44,5 @@ export class VolumeBot {
       throw error;
     }
   }
+
 }
