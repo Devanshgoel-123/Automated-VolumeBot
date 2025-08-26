@@ -5,7 +5,8 @@ config();
 
 export const KUCOIN_TARGET_VOLUME = 12500;
 export const KUCOIN_BASE_URL = "https://api.kucoin.com";
-export const TRADE_PAIR = "LOGX-USDT";
+export const TRADE_PAIR_KUCOIN = "LOGX-USDT";
+
 export const ORDER_BOOK_SIZE = "20";
 export const KUCOIN_API_KEY = process.env.KUCOIN_API_KEY;
 export const KUCOIN_API_SECRET = process.env.KUCOIN_API_SECRET;
@@ -22,7 +23,13 @@ export const KUCOIN_SIZE_POINTS = 1;
 
 //MEXC LOGX_USDT PAIR
 export const MEXC_FEE = 0.0002;
-export const LOGX_TICK_SIZE_MEXC = 0.000001;
+
+
+
+export const GATE_FEE=0.0002;
+export const GATE_PRECISION=2;
+export const GATEX_LOGX_TICK_SIZE = 0.00001; 
+export const GATEX_EXCHANGE_NAME = "GATEX";
 
 export const SYMBOL_DETAILS_KUCOIN = {
   symbol: "LOGX-USDT",
@@ -32,7 +39,12 @@ export const SYMBOL_DETAILS_KUCOIN = {
   minFunds: 0.1, // 0.1 USDT
 };
 
-export const SYMBOL_DETAILS_MEXC = {
-  symbol: "LOGXUSDT",
-  priceIncrement: LOGX_TICK_SIZE_MEXC, // 0.000001 USDT on MEXC
+export const SYMBOL_DETAILS_GATE = {
+  symbol: "LOGX_USDT",
+  minOrderSize: 0.01, // 0.01 LOGX
+  minFunds: 3, // 3 USDT
+  sizeIncrement: 0.01, // 0.01 LOGX
+  priceIncrement: 0.000001, // 0.000001 USDT
+  pricePrecision: 6, // 6 decimal places
+  sizePrecision: 2, // 2 decimal places
 };

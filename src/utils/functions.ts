@@ -48,14 +48,14 @@ export const generateDailySchedule = () => {
       time,
       size: usdtValue,
       type: isLimitBuy ? "BUY" : "SELL",
-      orderType: BatchAddOrdersOrderList.TypeEnum.LIMIT,
+      orderType: "LIMIT",
     };
 
     const compensatingTrade: Trade = {
       time,
       size: usdtValue,
       type: isLimitBuy ? "SELL" : "BUY",
-      orderType: BatchAddOrdersOrderList.TypeEnum.LIMIT,
+      orderType: "MARKET",
     };
 
     trades.push([firstTrade, compensatingTrade]);

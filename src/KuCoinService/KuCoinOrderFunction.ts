@@ -9,7 +9,7 @@ import {
   BatchAddOrdersOrderList,
   OrderAPI,
 } from "kucoin-universal-sdk/dist/generate/spot/order";
-import { TRADE_PAIR, ORDER_BOOK_SIZE, LOGX_MIN_SIZE } from "../utils/constants";
+import { TRADE_PAIR_KUCOIN, ORDER_BOOK_SIZE } from "../utils/constants";
 import { KUCOIN_SIZE_POINTS, KUCOIN_PRICE_POINTS } from "../utils/constants";
 import { Budget, Trade } from "../utils/types";
 import { InsertOrder } from "../db/orders";
@@ -17,17 +17,6 @@ import { LOGX_TICK_SIZE } from "../utils/constants";
 import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { TelegramService } from "../TelegramBot/index";
 config();
-
-/**
- * Validate order size meets minimum requirements
- * @param size - The order size in LOGX
- * @param price - The order price
- * @returns Whether the order meets minimum requirements
- */
-export const validateOrderSize = (size: number, price: number): boolean => {
-  const orderValue = size * price;
-  return size >= LOGX_MIN_SIZE && orderValue >= 0.1;
-};
 
 /**
  * Create a limit order
@@ -47,7 +36,7 @@ export const CreateLimitOrderStruct = async (
     const roundedSize =
       Math.round(size / SYMBOL_DETAILS_KUCOIN.sizeIncrement) *
       SYMBOL_DETAILS_KUCOIN.sizeIncrement;
-      Math.round(size / SYMBOL_DETAILS_KUCOIN.sizeIncrement) *
+    Math.round(size / SYMBOL_DETAILS_KUCOIN.sizeIncrement) *
       SYMBOL_DETAILS_KUCOIN.sizeIncrement;
 
     // Check if the order size is above the minimum order size
@@ -70,7 +59,7 @@ export const CreateLimitOrderStruct = async (
     const orderList: OrderListElement = {
       clientOid,
       symbol,
-      type: BatchAddOrdersOrderList.TypeEnum.LIMIT,
+      type: "LIMIT",
       side: side,
       price: roundedPrice.toFixed(KUCOIN_PRICE_POINTS),
       size: formattedSize.toFixed(KUCOIN_SIZE_POINTS),
@@ -102,8 +91,7 @@ export const PlaceBatchOrder = async (
     if (!client) {
       throw new Error("Failed to initialize KuCoin client");
     }
-    
-    
+
     const request = Spot.Order.BatchAddOrdersReq.create({
       orderList: orderList.map((order) =>
         Spot.Order.BatchAddOrdersOrderList.create({
@@ -122,7 +110,7 @@ export const PlaceBatchOrder = async (
     });
     const batchOrderResult = await client.batchAddOrders(request);
     console.log("Batch order result", batchOrderResult.data);
-  
+
     batchOrderResult.data.map(
       async (item: BatchAddOrdersData, index: number) => {
         if (item.success) {
@@ -152,23 +140,31 @@ export const PlaceBatchOrder = async (
           } else {
             console.error("Failed to store order", item);
             if (telegramService) {
-              await telegramService.sendErrorAlert(`KuCoin: Failed to store order ${orderItem.clientOid} in database`);
+              await telegramService.sendErrorAlert(
+                `KuCoin: Failed to store order ${orderItem.clientOid} in database`
+              );
             }
           }
         } else {
           success = false;
           if (telegramService) {
-            await telegramService.sendErrorAlert(`KuCoin: Order ${orderList[index]?.clientOid} failed to place`);
+            await telegramService.sendErrorAlert(
+              `KuCoin: Order ${orderList[index]?.clientOid} failed to place`
+            );
           }
         }
       }
     );
-    
+
     return success;
   } catch (error: any) {
     console.error("Error placing limit order", JSON.stringify(error));
     if (telegramService) {
-      await telegramService.sendErrorAlert(`KuCoin: Error placing batch orders - ${error.message || 'Unknown error'}`);
+      await telegramService.sendErrorAlert(
+        `KuCoin: Error placing batch orders - ${
+          error.message || "Unknown error"
+        }`
+      );
     }
     return false;
   }
@@ -187,7 +183,7 @@ export const GetOrderBook = async () => {
     }
     const request = Spot.Market.GetPartOrderBookReq.builder()
       .setSize(ORDER_BOOK_SIZE)
-      .setSymbol(TRADE_PAIR)
+      .setSymbol(TRADE_PAIR_KUCOIN)
       .build();
     client
       .getPartOrderBook(request)
@@ -216,7 +212,7 @@ export const FetchBestOrderBookPrices = async (client: MarketAPI) => {
     }
     const request = Spot.Market.GetPartOrderBookReq.builder()
       .setSize(ORDER_BOOK_SIZE)
-      .setSymbol(TRADE_PAIR)
+      .setSymbol(TRADE_PAIR_KUCOIN)
       .build();
     const result = await client.getPartOrderBook(request);
     return {
@@ -229,6 +225,13 @@ export const FetchBestOrderBookPrices = async (client: MarketAPI) => {
   }
 };
 
+/**
+ * Check if the trade can be executed
+ * @param trade - The trade to check
+ * @param KuCoinTracker - The budget tracker
+ * @param client - The KuCoin client
+ * @returns True if the trade can be executed, false otherwise
+ */
 export const CanExecuteTrade = async (
   trade: OrderListElement,
   KuCoinTracker: Budget,
@@ -265,7 +268,7 @@ export const ValidateTrade = async (logxSize: number, buyPrice: number) => {
     console.log(
       `Invalid size ${logxSize} or notional ${
         logxSize * buyPrice
-      } for ${TRADE_PAIR}`
+      } for ${TRADE_PAIR_KUCOIN}`
     );
     return false;
   }
@@ -287,7 +290,7 @@ export const CheckNotionalValue = async (
     console.log(
       `Notional value ${notional.toFixed(3)} is below minimum ${
         SYMBOL_DETAILS_KUCOIN.minFunds
-      } for ${TRADE_PAIR}`
+      } for ${TRADE_PAIR_KUCOIN}`
     );
     return false;
   }
@@ -309,8 +312,6 @@ export const CheckOrderSize = async (size: number, symbol: string) => {
   }
   return true;
 };
-
-
 
 /**
  * Process each trade pair
@@ -341,15 +342,17 @@ export const ProcessEachTradePair = async (
     if (!book) {
       console.error("⚠️ Failed to fetch order book, skipping trade");
       if (telegramService) {
-        await telegramService.sendErrorAlert("KuCoin: Failed to fetch order book, skipping trade");
+        await telegramService.sendErrorAlert(
+          "KuCoin: Failed to fetch order book, skipping trade"
+        );
       }
       return;
     }
-    
+
     // Target Volume is distributed into multiple sub orders volume
     const usdtSize = tradePair[0].size;
     const bestBid = parseFloat(book.bid);
-    const buyPrice = bestBid + LOGX_TICK_SIZE;
+    const buyPrice = bestBid + (LOGX_TICK_SIZE * 5);
     const sellPrice = buyPrice;
 
     //Amount of LOGX tokens to buy and sell
@@ -362,40 +365,46 @@ export const ProcessEachTradePair = async (
     if (!isValid) {
       console.log("Trade is invalid, skipping");
       if (telegramService) {
-        await telegramService.sendErrorAlert(`KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`);
+        await telegramService.sendErrorAlert(
+          `KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`
+        );
       }
       return;
     }
-    
+
     const buyOrder = await CreateLimitOrderStruct(
       logxSize,
       buyPrice,
       "BUY",
-      TRADE_PAIR
+      TRADE_PAIR_KUCOIN
     );
 
     const sellOrder = await CreateLimitOrderStruct(
       logxSize,
       sellPrice,
       "SELL",
-      TRADE_PAIR
+      TRADE_PAIR_KUCOIN
     );
 
     if (!buyOrder || !sellOrder) {
       console.error("Failed to create orders, skipping");
       if (telegramService) {
-        await telegramService.sendErrorAlert("KuCoin: Failed to create buy/sell orders");
+        await telegramService.sendErrorAlert(
+          "KuCoin: Failed to create buy/sell orders"
+        );
       }
       return;
     }
-    
+
     if (
       (await CanExecuteTrade(buyOrder, tracker, marketClient)) &&
       (await CanExecuteTrade(sellOrder, tracker, marketClient))
     ) {
       console.log("Maker and Taker Trades are valid, creating orders");
       if (telegramService) {
-        await telegramService.sendAlert(`✅ KuCoin: Trade validation passed - Size: ${logxSize} LOGX, Price: $${buyPrice}`);
+        await telegramService.sendAlert(
+          `✅ KuCoin: Trade validation passed - Size: ${logxSize} LOGX, Price: $${buyPrice}`
+        );
       }
     } else {
       console.error("Maker and Taker Trades are not valid, skipping");
@@ -404,20 +413,27 @@ export const ProcessEachTradePair = async (
       }
       return;
     }
-    
+
     orderList.push(buyOrder);
     orderList.push(sellOrder);
 
     if (orderList.length === 2) {
       console.log("Placing batched orders", orderList);
       // 3. Place both together as a batch
-      const result = await PlaceBatchOrder(orderList, client, tracker, telegramService);
+      const result = await PlaceBatchOrder(
+        orderList,
+        client,
+        tracker,
+        telegramService
+      );
       if (result) {
         console.log("✅ Successfully placed batched orders");
       } else {
         console.error("Failed to place batched orders");
         if (telegramService) {
-          await telegramService.sendErrorAlert("KuCoin: Failed to place batched orders");
+          await telegramService.sendErrorAlert(
+            "KuCoin: Failed to place batched orders"
+          );
         }
         return;
       }
@@ -426,13 +442,17 @@ export const ProcessEachTradePair = async (
         `⚠️ Skipping trade pair - only ${orderList.length} valid orders created`
       );
       if (telegramService) {
-        await telegramService.sendErrorAlert(`KuCoin: Only ${orderList.length} valid orders created, skipping trade pair`);
+        await telegramService.sendErrorAlert(
+          `KuCoin: Only ${orderList.length} valid orders created, skipping trade pair`
+        );
       }
     }
   } catch (err: any) {
     console.error("Error executing trade:", JSON.stringify(err.data));
     if (telegramService) {
-      await telegramService.sendErrorAlert(`KuCoin: Error executing trade - ${err.message || 'Unknown error'}`);
+      await telegramService.sendErrorAlert(
+        `KuCoin: Error executing trade - ${err.message || "Unknown error"}`
+      );
     }
   }
 };

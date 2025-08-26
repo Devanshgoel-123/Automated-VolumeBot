@@ -1,9 +1,10 @@
-import { KUCOIN_EXCHANGE_NAME } from "../utils/constants";
+import { GATEX_EXCHANGE_NAME, KUCOIN_EXCHANGE_NAME } from "../utils/constants";
 import { Budget, OrderListElement, Trade } from "../utils/types";
 import { TelegramService } from "../TelegramBot/index";
 import { KuCoinAdapter } from "./KuCoin/KuCoinAdapter";
-// import { GateAdapter } from "./Gate/GateAdapter";
-// import { MexcAdapter } from "./MexC/MexcAdapter";
+import { GateXAdapter } from "./Gate/GateAdapter";
+
+
 export interface ExchangeAdapter {
   exchangeName: string;
   initializeClients(): Promise<void>;
@@ -36,8 +37,8 @@ export class ExchangeFactory {
     switch (name) {
       case KUCOIN_EXCHANGE_NAME:
         return new KuCoinAdapter();
-      // case "GATE":
-      //   return new GateAdapter();
+      case GATEX_EXCHANGE_NAME:
+        return new GateXAdapter();
       // case "MEXC":
       //   return new MexcAdapter();
       default:
