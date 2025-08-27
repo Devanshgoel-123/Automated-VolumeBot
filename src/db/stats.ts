@@ -57,9 +57,37 @@ export const GetTodaysStats=async(date:string,exchangeName:string)=>{
       .from(DailyStatsTable)
       .where(and(eq(DailyStatsTable.date, date),eq(DailyStatsTable.exchangeName,exchangeName)))
       .groupBy(DailyStatsTable.exchangeName);
+      
     const statsDaily=stats[0];
     return statsDaily;
     }catch(error){
         console.error("Error getting today's stats", error);
     }
 }
+
+/**
+ * Get the monthly fees for an exchange
+ * @param exchangeName - The exchange name to get the monthly fees for
+ * @returns The monthly fees for the exchange
+ */
+export const GetMonthlyFeesForExchange = async (exchangeName: string) => {
+    try {
+      const stats = await db
+        .select({
+          exchangeName: DailyStatsTable.exchangeName,
+          totalMonthlyFees: sql<number>`SUM(${DailyStatsTable.totalFees}::numeric)`,
+        })
+        .from(DailyStatsTable)
+        .where(
+          and(
+            eq(DailyStatsTable.exchangeName, exchangeName),
+            sql`date_trunc('month', ${DailyStatsTable.date}::date) = date_trunc('month', CURRENT_DATE)`
+          )
+        )
+        .groupBy(DailyStatsTable.exchangeName);
+      return stats[0] ?? null;
+    } catch (error) {
+      console.error("Error getting monthly fees", error);
+      return null;
+    }
+  };

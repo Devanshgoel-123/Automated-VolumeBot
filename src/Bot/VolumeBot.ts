@@ -2,6 +2,7 @@ import { ExchangeAdapter } from "../Exchanges/exchange";
 import { TelegramService } from "../TelegramBot/index";
 import cron from "node-cron";
 import { ResetDailyCounter } from "../utils/functions";
+import { UpdateDailyStats } from "../db/stats";
 
 
 export class VolumeBot {
@@ -29,15 +30,23 @@ export class VolumeBot {
 
       cron.schedule("0 0 * * *", async () => {
         console.log("Resetting daily counter");
+        console.log("The tracker is", this.adapter.tracker.dailyLimit, this.adapter.tracker.dailyVolume, this.adapter.tracker.dailyTrades, this.adapter.tracker.dailySpent);
         await this.telegramService.sendDailyStats({
           totalTrades: this.adapter.tracker.dailyTrades,
           totalVolume: this.adapter.tracker.dailyVolume,
           totalFees: this.adapter.tracker.dailySpent,
-          date: new Date().toString(),
+          date: new Date().toISOString().split("T")[0],
           exchangeName: this.adapter.exchangeName
         });
-        ResetDailyCounter(this.adapter.tracker);
-        await this.telegramService.sendAlert("🔄 Daily counters reset - new trading day started!");
+        const result=await UpdateDailyStats({
+          date: new Date().toISOString().split("T")[0],
+          totalVolume: this.adapter.tracker.dailyVolume,
+          totalTrades: this.adapter.tracker.dailyTrades,
+          totalFees: this.adapter.tracker.dailySpent,
+          exchangeName: this.adapter.exchangeName
+        })
+       ResetDailyCounter(this.adapter.tracker);
+        await this.telegramService.sendAlert("Daily counters reset - new trading day started!");
       });
     } catch (error) {
       await this.telegramService.sendErrorAlert(`Failed to start Volume Bot: ${error}`);

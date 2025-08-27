@@ -17,7 +17,7 @@ import { generateDailySchedule } from "../../utils/functions";
 import { TelegramService } from "../../TelegramBot/index";
 import { UpdateDailyStats } from "../../db/stats";
 import { GetTodaysStats } from "../../db/stats";
-
+import { GetMonthlyFeesForExchange } from "../../db/stats";
 export class GateXAdapter implements ExchangeAdapter {
   private client!: SpotApi | null;
   exchangeName: string;
@@ -41,16 +41,15 @@ export class GateXAdapter implements ExchangeAdapter {
 
   async initializeStats(): Promise<void> {
     const schedule = this.generateSchedule();
-    const result = await GetTodaysStats(
-      new Date().toString(),
-      this.exchangeName
-    );
+    const result=await GetTodaysStats((new Date().toISOString().split("T")[0]),this.exchangeName);
+      const monthlyFees=await GetMonthlyFeesForExchange(this.exchangeName);
     this.tracker.schedule.trades = schedule.trades;
     this.tracker.schedule.exchange = schedule.exchange;
+    this.tracker.monthlySpent=Number(monthlyFees?.totalMonthlyFees || 0);
     if (result) {
-      this.tracker.dailyVolume = result.totalVolume;
-      this.tracker.dailyTrades = result.totalTrades;
-      this.tracker.dailySpent = result.totalFees;
+      this.tracker.dailyVolume = Number(result.totalVolume);
+      this.tracker.dailyTrades = Number(result.totalTrades);
+      this.tracker.dailySpent = Number(result.totalFees);
     }
   }
 
@@ -89,10 +88,6 @@ export class GateXAdapter implements ExchangeAdapter {
     return await ValidateTrade(size, price);
   }
 
-  async cancelOrder(orderId: string): Promise<boolean> {
-    return true;
-  }
-
   async processTrades(telegramService?: TelegramService): Promise<void> {
     console.log("Started processing trades");
     const spotClient = this.client;
@@ -110,13 +105,11 @@ export class GateXAdapter implements ExchangeAdapter {
         `KuCoin: Starting to process ${this.tracker.schedule.trades.length} trade pairs`
       );
     }
-    console.log("The trades are", this.tracker.schedule.trades);
     for (const tradePair of this.tracker.schedule.trades) {
       const now = new Date();
       const delay = tradePair[0].time.getTime() - now.getTime();
 
       if (delay < 0) {
-        console.log(`The time has passed for interval ${tradePair[0].time}`);
         continue;
       }
       setTimeout(async () => {
@@ -128,24 +121,30 @@ export class GateXAdapter implements ExchangeAdapter {
           this.isBotRunning,
           telegramService
         );
-      }, delay);
+      }, delay - 30000);
     }
   }
 
   generateSchedule() {
-    return generateDailySchedule();
+    return generateDailySchedule(this.exchangeName);
   }
 
   async stopBot(): Promise<void> {
     console.log("Stopping the bot");
     const result = await UpdateDailyStats({
-      date: new Date().toString(),
+      date: new Date().toISOString().split("T")[0],
       exchangeName: this.exchangeName,
       totalVolume: this.tracker.dailyVolume,
       totalTrades: this.tracker.dailyTrades,
       totalFees: this.tracker.dailySpent,
     });
     this.isBotRunning = false;
+    return Promise.resolve();
+  }
+
+  setBudget(monthlyLimit: number): Promise<void> {
+    this.tracker.monthlyLimit=monthlyLimit;
+    this.tracker.dailyLimit=parseFloat(Number(monthlyLimit/30).toFixed(4));
     return Promise.resolve();
   }
 }

@@ -1,23 +1,24 @@
 import { KUCOIN_TARGET_VOLUME } from "./constants";
 import { Budget } from "./types";
 import { Trade } from "./types";
+import { KUCOIN_EXCHANGE_NAME } from "./constants";
+import { GATEX_TARGET_VOLUME } from "./constants";
 import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot/order";
 /**
  * Reset the daily counter and log the previous day's data
  * @param budget - The budget object
  */
 export const ResetDailyCounter = async (budget: Budget): Promise<void> => {
-  console.log("Resetting daily counter");
-  const { trades } = generateDailySchedule();
+  const { trades } = generateDailySchedule(budget.schedule.exchange);
   budget.dailySpent = 0;
   budget.dailyVolume = 0;
   budget.dailyTrades = 0;
   budget.schedule.trades = trades;
 };
 
-export const generateDailySchedule = () => {
-  const numPairs = Math.floor(Math.random() * (580 - 575 + 1)) + 580; // Random 575-580 pairs
-  const totalValue = KUCOIN_TARGET_VOLUME;
+export const generateDailySchedule = (exchangeName: string) => {
+  const numPairs = Math.floor(Math.random() * (580 - 575 + 1)) + 580; 
+  const totalValue = exchangeName === KUCOIN_EXCHANGE_NAME ? KUCOIN_TARGET_VOLUME : GATEX_TARGET_VOLUME;
   const trades: Trade[][] = [];
   const intervals = Array.from({ length: numPairs }, (_, i) => i * 2.5);
 
@@ -31,9 +32,19 @@ export const generateDailySchedule = () => {
     .fill(0)
     .map(() => Math.random() * (totalValue / numPairs) * 2);
   const sumUsdt = tradeUsdtSizes.reduce((a, b) => a + b, 0);
-  const normalizedUsdtSizes = tradeUsdtSizes.map((size) =>
+  let normalizedUsdtSizes = tradeUsdtSizes.map((size) =>
     Number(((size / sumUsdt) * totalValue).toFixed(2))
   );
+
+  const MIN_SIZE = 15;
+  normalizedUsdtSizes = normalizedUsdtSizes.map((s) => (s < MIN_SIZE ? MIN_SIZE : s));
+
+  // Renormalize after enforcing minimums
+  const adjustedSum = normalizedUsdtSizes.reduce((a, b) => a + b, 0);
+  normalizedUsdtSizes = normalizedUsdtSizes.map((s) =>
+    Number(((s / adjustedSum) * totalValue).toFixed(2))
+  );
+
   const normalizedUsdtValues = normalizedUsdtSizes.reduce((a, b) => a + b, 0);
 
   selectedIntervals.forEach((intervalStart, index) => {
@@ -62,7 +73,7 @@ export const generateDailySchedule = () => {
   });
 
   return {
-    exchange: "KuCoin",
+    exchange: exchangeName,
     trades,
     totalValue,
     sumUsdt,

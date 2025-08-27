@@ -1,12 +1,16 @@
 import "reflect-metadata";
+import bodyParser from "body-parser";
 import express from "express";
 const app = express();
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 import { ExchangeFactory } from "./Exchanges/exchange";
 import { KUCOIN_EXCHANGE_NAME, GATEX_EXCHANGE_NAME } from "./utils/constants";
 import { VolumeBot } from "./Bot/VolumeBot";
 import { TelegramService } from "./TelegramBot/index";
-
-
+import { checkPassword } from "./MiddleWare/middleware";
 // Initialize Telegram service
 const telegramService = new TelegramService();
 
@@ -19,27 +23,8 @@ const gateXBot = new VolumeBot(gateXAdapter, telegramService);
 
 // Store bot instances for termination
 const activeBots:VolumeBot[] = [];
-gateXBot.start()
 
-// Track bot running state
 
-// Example of fetching prices (keeping existing functionality)
-// const FetchPrices = async () => {
-//   const client = await InitializeGateXService();
-//   if (client === null || client === undefined) {
-//     throw new Error("Error fetching prices for GateX");
-//   }
-//   // const result=await FetchBestOrderBookPrices(client);
-//   const result = await GetOrderBook(client);
-//   console.log(result);
-//   // const client = await InitializeMexcService();
-//   // if (client === null || client === undefined) {
-//   //   throw new Error("Error fetching prices");
-//   // }
-//   // const result = await FetchBestOrderBookPrices(client);
-//   // console.log(result);
-// };
-// FetchPrices();
 
 app.get("/", (req, res) => {
   res.send("Volume Bot with Telegram Integration");
@@ -52,7 +37,7 @@ app.get("/", (req, res) => {
  * 3. Send a Telegram message to notify the user that the bot has been started
  * 4. Return a success message
  */
-app.post("/startBot", async (req, res) => {
+app.post("/startBot",checkPassword, async (req, res) => {
   try {
     await telegramService.sendAlert("🤖 Bot starting via API request");
     await kuCoinBot.start();
@@ -68,6 +53,28 @@ app.post("/startBot", async (req, res) => {
 });
 
 
+app.post("/setBudget",checkPassword, async (req, res) => {
+  try {
+    const {exchangeName, monthlyLimit}=req.body;
+    if(!exchangeName || !monthlyLimit){
+      return res.status(400).send("Missing required fields");
+    }
+    if(exchangeName === KUCOIN_EXCHANGE_NAME){
+      await kuCoinAdapter.setBudget(monthlyLimit);
+    }else if(exchangeName === GATEX_EXCHANGE_NAME){
+      await gateXAdapter.setBudget(monthlyLimit);
+    }else{
+      return res.status(400).send("Invalid exchange name");
+    }
+    res.status(200).send("Budget set successfully");
+  } catch (err) {
+    console.error("Error setting budget", err);
+    await telegramService.sendErrorAlert(`Failed to set budget: ${err}`);
+    res.status(500).send("Error setting budget");
+  }
+});
+
+
 /** 
  * Terminate the bot
  * 1. Stop the bot from processing new trade
@@ -75,7 +82,7 @@ app.post("/startBot", async (req, res) => {
  * 3. Send a Telegram message to notify the user that the bot has been terminated
  * 4. Return a success message
  */
-app.post("/terminate", async (req, res) => {
+app.post("/terminate",checkPassword, async (req, res) => {
   try {
     console.log("🛑 Terminating bot via API request...");
     await telegramService.sendAlert(
@@ -147,48 +154,6 @@ app.get("/status", (req, res) => {
   });
 });
 
-/**
- * Restart the bot
- * 1. Stop the bot
- * 2. Wait for a moment for cleanup
- * 3. Restart the bot
- * 4. Add the bot to the active bots list
- * 5. Send a Telegram message to notify the user that the bot has been restarted
- * 6. Return a success message
- */
-app.post("/restart", async (req, res) => {
-  try {
-    console.log("🔄 Restarting bot via API request...");
-    await telegramService.sendAlert("🔄 Bot restart initiated via API request");
-
-    // First Stop the bot 
-    await Promise.all(activeBots.map(async (bot) => {
-      bot.adapter.isBotRunning = false;
-    }));
-
-    // Wait a moment for cleanup
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Then restart
-    await gateXBot.start();
-    activeBots.push(gateXBot);
-    await kuCoinBot.start();
-    activeBots.push(kuCoinBot);
-    await telegramService.sendAlert("✅ Bot restarted successfully");
-    res.status(200).json({
-      message: "Bot restarted successfully",
-      status: "restarted",
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("Error restarting bot", err);
-    await telegramService.sendErrorAlert(`Failed to restart bot: ${err}`);
-    res.status(500).json({
-      error: "Error restarting bot",
-      message: err instanceof Error ? err.message : "Unknown error",
-    });
-  }
-});
 
 app.listen(3000, () => {
   console.log("Server is running on port 3000");

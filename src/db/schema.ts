@@ -2,7 +2,7 @@ import { boolean } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 import { integer } from "drizzle-orm/pg-core";
 import { text, timestamp, numeric, date } from "drizzle-orm/pg-core";
-
+import { unique } from "drizzle-orm/pg-core";
 export const ordersTable = pgTable("orders", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   clientOid: text().notNull(),
@@ -18,12 +18,17 @@ export const ordersTable = pgTable("orders", {
 
 export const DailyStatsTable = pgTable("daily_stats", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
-  date: text().notNull(),
+  date: date().notNull(),
   totalVolume: numeric().notNull(),
   totalTrades: integer().notNull(),
   totalFees: numeric().notNull(),
   exchangeName: text().notNull(),
-});
+},
+(table) => ({
+  // composite unique constraint
+  dateExchangeUnique: unique().on(table.date, table.exchangeName),
+})
+);
 
 // daily alerts -> fees, order cancel
 // make random price fluctuations, full body candles

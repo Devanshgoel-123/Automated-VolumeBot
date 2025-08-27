@@ -70,44 +70,135 @@ export const PlaceBatchOrder = async (
   telegramService?: TelegramService
 ): Promise<boolean> => {
   try {
-    let success = false;
+    let success = true;
     if (!client) {
-
       throw new Error("Failed to initialize GateX client");
     }
-    const orderListGateX: Order[] = orderList.map((order,index) => {
+    const cancelOpenOrders = await client.cancelOrders({
+      currencyPair: SYMBOL_DETAILS_GATE.symbol
+    })
+
+    if(cancelOpenOrders.response.status === 200){
+      cancelOpenOrders.body.map(async (item:Order)=>{
+        await telegramService?.sendAlert(`GateX: Cancelled open order ${item.side} ${item.amount} ${item.price}`)
+        tracker.dailyVolume -= Number(item.amount) * Number(item.price);
+        tracker.dailyTrades -= 1;
+        tracker.dailySpent -= Number(item.amount) * Number(item.price) * Number(GATE_FEE);
+        tracker.monthlySpent -= Number(item.amount) * Number(item.price) * Number(GATE_FEE);
+        tracker.monthlyTrades -= 1;
+      })
+    }else{
+      console.error("Failed to cancel open orders");
+      await telegramService?.sendErrorAlert(
+        "GateX: Failed to cancel open orders"
+      );
+    }
+    console.log("The cancel open orders result is", cancelOpenOrders.body);
+    const orderListGateX: Order[] = orderList.map((order, index) => {
       const side = order.side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
       return {
         currencyPair: SYMBOL_DETAILS_GATE.symbol,
         side: side,
         type: Order.Type.Limit,
         amount: Number(order.size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
-        price: Number(order.price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
+        price:  Number(order.price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
         text: `t-${order.clientOid}`,
-        timeInForce: index === 0 ? Order.TimeInForce.Gtc : Order.TimeInForce.Gtc,
         postOnly: index === 0 ? true : false,
+        timeInForce: Order.TimeInForce.Gtc, 
       };
     });
-    console.log("Order list", orderListGateX);
+    // const side = orderList[0].side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
+    // const side2 = orderList[1].side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
+    // const orderOneStruct:Order = {
+    //   currencyPair: SYMBOL_DETAILS_GATE.symbol,
+    //   side: side,
+    //   type:  Order.Type.Limit ,
+    //   amount: Number(orderList[0].size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
+    //   price:  Number(orderList[0].price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
+    //   text: `t-${orderList[0].clientOid}`,
+    //   timeInForce: Order.TimeInForce.Gtc,
+    // }
+    // const orderTwoStruct:Order = {
+    //   currencyPair: SYMBOL_DETAILS_GATE.symbol,
+    //   side: side2,
+    //   type:  Order.Type.Limit,
+    //   price: Number(orderList[1].price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
+    //   amount: Number(orderList[1].size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
+    //   text: `t-${orderList[0].clientOid}`,
+    //   timeInForce: Order.TimeInForce.Ioc,
+    // }
+    // const opts1 = {
+    //   xGateExptime: (new Date().getTime() + 60000).toString(),
+    // };
+    // const opts2 = {
+    //   xGateExptime: undefined,
+    // };
+    // const orderOne= await client.createOrder(orderOneStruct, opts1)
+    // await new Promise(resolve => setTimeout(resolve, 1000));
+    // const orderTwo= await client.createOrder(orderTwoStruct, opts2)
+    // console.log(orderOne.body)
+   // console.log(orderTwo.body)
     const batchOrderResult = await client.createBatchOrders(orderListGateX, {
       xGateExptime: (new Date().getTime() + 60000).toString(),
     });
-    
-    if(batchOrderResult.response.status===200){
-      const order=orderList[0];
-      const volume=Number(order.price)*Number(order.size)
-      tracker.dailyVolume+=volume;
-      tracker.dailyTrades+=orderList.length;
-      tracker.dailySpent+=volume*GATE_FEE;
-      success=true;
-    }else{
-      success=false;
-      await telegramService?.sendErrorAlert("Failed to place batch order on Gatex");
+    if (batchOrderResult.response.status === 200) {
+      console.log("The batch order result is", batchOrderResult.body);
+      const orderIds = batchOrderResult.body.map(
+        (item: BatchOrder) => item.orderId as string
+      );
+      const opts = {};
+      batchOrderResult.body.forEach(async (order:BatchOrder) => {
+        try {
+          if(order.message === "Not enough balance"){
+            await telegramService?.sendErrorAlert(
+              `GateX: Not enough balance for ${order.id}`
+            );
+            return;
+          }
+          if(!order.succeeded){
+            await telegramService?.sendErrorAlert(
+              `GateX: Batch order failed, order status failed`
+            );
+            return;
+          }
+          if(order.message === "Insufficient funds"){
+          const orderStatus = await client.getOrder(
+            order.id as string,
+            SYMBOL_DETAILS_GATE.symbol,
+            opts
+          );
+          if (
+            orderStatus.response.status === 200 
+          ) {
+            const order = orderList[0];
+            const volume = Number(order.price) * Number(order.size);
+            tracker.dailyVolume += Number(volume);
+            tracker.dailyTrades += orderList.length;
+            tracker.dailySpent += Number(volume * GATE_FEE);
+            tracker.monthlySpent  += Number(volume * GATE_FEE);
+            tracker.monthlyTrades += orderList.length;
+          }
+        }
+        } catch (error) {
+          console.error("Error getting order status");
+          await telegramService?.sendErrorAlert(
+            `GateX: Failed to get order status for ${order.id}`
+          );
+        }
+      });  
+      success = true;
+    } else {
+      success = false;
+      await telegramService?.sendErrorAlert(
+        "Failed to place batch order on Gatex"
+      );
     }
-    return success
+    return success;
   } catch (error) {
     console.error("Error placing batch order on Gatex", error);
-    await telegramService?.sendErrorAlert("Failed to place batch order on Gatex");
+    await telegramService?.sendErrorAlert(
+      "Failed to place batch order on Gatex"
+    );
     return false;
   }
 };
@@ -216,9 +307,11 @@ export const CanExecuteTrade = async (
   }
   const { ask } = result;
   const tradeCost = Number(trade.size) * Number(ask) * GATE_FEE; // Maker fee (0.06%)
+  console.log(tradeCost)
+  console.log( GateXTracker.dailySpent + tradeCost, GateXTracker.dailyLimit)
+  console.log( GateXTracker.monthlySpent + tradeCost ,GateXTracker.monthlyLimit)
   const canExecute =
-    GateXTracker.dailySpent + tradeCost <= GateXTracker.dailyLimit &&
-    GateXTracker.monthlySpent + tradeCost <= GateXTracker.monthlyLimit;
+    Number(GateXTracker.monthlySpent.toFixed(5)) + Number(tradeCost.toFixed(5)) <= Number(GateXTracker.monthlyLimit.toFixed(5));
   if (!canExecute) {
     console.log(`Budget limit reached, skipping trade ${trade.size}`);
     return false;
@@ -263,8 +356,14 @@ export const ProcessEachTradePair = async (
     const usdtSize = tradePair[0].size;
     const bestBid = parseFloat(book.bid);
     const bestAsk = parseFloat(book.ask);
-    const midPrice=Number(((bestBid + bestAsk)/2).toFixed(SYMBOL_DETAILS_GATE.pricePrecision));
-    const buyPrice = Number((midPrice + GATEX_LOGX_TICK_SIZE).toFixed(SYMBOL_DETAILS_GATE.pricePrecision));
+    const midPrice = Number(
+      ((bestBid + bestAsk) / 2).toFixed(SYMBOL_DETAILS_GATE.pricePrecision)
+    );
+    const buyPrice = Number(
+      (midPrice + GATEX_LOGX_TICK_SIZE).toFixed(
+        SYMBOL_DETAILS_GATE.pricePrecision
+      )
+    );
     const sellPrice = Number(buyPrice);
     // console.log("The best bid is", bestBid);
     // console.log("The best ask is", bestAsk);
@@ -288,14 +387,14 @@ export const ProcessEachTradePair = async (
     const buyOrder = await CreateLimitOrderStruct(
       logxSize,
       buyPrice,
-      "BUY",
+      tradePair[0].type,
       SYMBOL_DETAILS_GATE.symbol
     );
 
     const sellOrder = await CreateLimitOrderStruct(
       logxSize,
       sellPrice,
-      "SELL",
+      tradePair[1].type,
       SYMBOL_DETAILS_GATE.symbol
     );
 
@@ -318,7 +417,7 @@ export const ProcessEachTradePair = async (
       if (telegramService) {
         await telegramService.sendBudgetAlert(tracker);
       }
-      return;
+      return 
     }
 
     orderList.push(buyOrder);

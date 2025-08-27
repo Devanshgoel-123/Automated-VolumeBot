@@ -27,13 +27,13 @@ export interface ExchangeAdapter {
 
   validateTrade(size: number, price: number): Promise<boolean>;
 
-  cancelOrder(orderId: string): Promise<boolean>;
-
   processTrades(telegramService?: TelegramService): Promise<void>;
 
   generateSchedule(): { trades: Trade[][]; exchange: string };
 
   stopBot(): Promise<void>;
+
+  setBudget(monthlyLimit: number): Promise<void>;
 }
 
 export class ExchangeFactory {

@@ -89,8 +89,9 @@ export class TelegramService {
     try {
       const message = `
         <b>Budget Alert</b>
-        <b>Daily Limit:</b> $${budget.dailyLimit || 0}
-        <b>Monthly Limit:</b> $${budget.monthlyLimit || 0}
+        <b>Daily Limit:</b> $${budget.dailySpent.toFixed(3) || 0}
+        <b>Monthly Limit:</b> $${budget.monthlySpent.toFixed(3) || 0}
+        <b>Exchange name:</b> ${budget.schedule.exchange}
         `.trim();
       const sentMessage = await this.bot.sendMessage(this.chatId, message, {
         parse_mode: "HTML",

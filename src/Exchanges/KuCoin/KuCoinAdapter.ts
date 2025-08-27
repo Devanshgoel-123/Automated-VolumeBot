@@ -18,6 +18,7 @@ import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot
 import { TelegramService } from "../../TelegramBot/index";
 import { KUCOIN_EXCHANGE_NAME, TRADE_PAIR_KUCOIN } from "../../utils/constants";
 import { GetTodaysStats } from "../../db/stats";
+import { GetMonthlyFeesForExchange } from "../../db/stats";
 
 
 export class KuCoinAdapter implements ExchangeAdapter {
@@ -47,12 +48,18 @@ export class KuCoinAdapter implements ExchangeAdapter {
 
    async initializeStats(): Promise<void> {
       const schedule=this.generateSchedule();
-      const result=await GetTodaysStats((new Date()).toString(),this.exchangeName);
+      console.log("Getting todays stats", (new Date().toISOString().split("T")[0]));
+      console.log("Getting todays stats", (new Date().toUTCString().split("T")[0]));
+      const result=await GetTodaysStats((new Date().toISOString().split("T")[0]),this.exchangeName);
+      const monthlyFees=await GetMonthlyFeesForExchange(this.exchangeName);
+      console.log("Monthly fees", monthlyFees?.totalMonthlyFees);
+      this.tracker.schedule.trades = schedule.trades;
+      this.tracker.monthlySpent=Number(monthlyFees?.totalMonthlyFees || 0);
+      this.tracker.schedule.exchange = schedule.exchange;
       if(result){
-        this.tracker.dailyVolume=result.totalVolume;
-        this.tracker.dailyTrades=result.totalTrades;
-        this.tracker.dailySpent=result.totalFees;
-        this.tracker.schedule=schedule;
+        this.tracker.dailyVolume=Number(result.totalVolume);
+        this.tracker.dailyTrades=Number(result.totalTrades);
+        this.tracker.dailySpent=Number(result.totalFees);
       }
     }
 
@@ -60,7 +67,6 @@ export class KuCoinAdapter implements ExchangeAdapter {
     this.marketClient = await InitializeKuCoinClientMarket();
     this.orderClient = await InitializeKuCoinClientSpot();
     this.isBotRunning = true;
-    console.log("The clients are", this.marketClient, this.orderClient);
   }
 
   async createBatchOrder(
@@ -92,12 +98,8 @@ export class KuCoinAdapter implements ExchangeAdapter {
     return await ValidateTrade(size, price);
   }
 
-  async cancelOrder(orderId: string): Promise<boolean> {
-    return true;
-  }
 
   async processTrades(telegramService?: TelegramService): Promise<void> {
-    console.log("Started processing trades");
     const marketClient = this.marketClient;
     if (marketClient === null || marketClient === undefined || this.isBotRunning === false) {
       console.log("Error 1");
@@ -118,7 +120,6 @@ export class KuCoinAdapter implements ExchangeAdapter {
       const delay = tradePair[0].time.getTime() - now.getTime();
 
       if (delay < 0) {
-        console.log(`The time has passed for interval ${tradePair[0].time}`);
         continue;
       }
       setTimeout(async () => {
@@ -136,11 +137,17 @@ export class KuCoinAdapter implements ExchangeAdapter {
   }
 
   generateSchedule() {
-    return generateDailySchedule();
+    return generateDailySchedule(this.exchangeName);
   }
 
   stopBot(): Promise<void> {
     this.isBotRunning = false;
+    return Promise.resolve();
+  }
+
+  setBudget(monthlyLimit: number): Promise<void> {
+    this.tracker.monthlyLimit=monthlyLimit;
+    this.tracker.dailyLimit=parseFloat(Number(monthlyLimit/30).toFixed(4));
     return Promise.resolve();
   }
 }
