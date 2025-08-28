@@ -1,44 +1,22 @@
 # Stage 1: Builder
 FROM --platform=linux/amd64 public.ecr.aws/l8t0j4y9/node-18-alpine:latest AS builder
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package.json and package-lock.json
 COPY package*.json ./
-COPY tsconfig.json ./
 
-# Install ALL dependencies (including devDeps for TypeScript)
-RUN npm ci
+# Install dependencies
+RUN npm install
 
-# Copy source code
-COPY src/ ./src/
+# Copy application source code
+COPY . .
 
-# Build the application (compile TypeScript to dist/)
+# Build the application (if necessary)
 RUN npm run build
 
-# Stage 2: Production
-FROM --platform=linux/amd64 public.ecr.aws/l8t0j4y9/node-18-alpine:latest AS production
-
-# Create app user
-RUN addgroup -g 1001 -S nodejs \
- && adduser -S nodejs -u 1001
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci && npm cache clean --force
-
-# Copy built application from builder stage
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-
-# Switch to non-root user
-USER nodejs
-
-# Expose port
+# Expose port (optional, if you want it documented)
 EXPOSE 3000
 
-# Start the application (dist already built)
-CMD ["node", "dist/index.js"]
+# Start the application
+CMD ["node", "dist/main"]
