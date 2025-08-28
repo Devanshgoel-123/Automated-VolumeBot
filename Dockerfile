@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM node:18-alpine AS builder
+FROM --platform=linux/amd64 public.ecr.aws/l8t0j4y9/node-18-alpine:latest AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # Stage 2: Production
-FROM node:18-alpine AS production
+FROM --platform=linux/amd64 public.ecr.aws/l8t0j4y9/node-18-alpine:latest AS production
 
 # Create app user
 RUN addgroup -g 1001 -S nodejs \
