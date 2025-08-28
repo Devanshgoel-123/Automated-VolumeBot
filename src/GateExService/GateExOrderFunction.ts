@@ -142,7 +142,6 @@ export const PlaceBatchOrder = async (
       xGateExptime: (new Date().getTime() + 60000).toString(),
     });
     if (batchOrderResult.response.status === 200) {
-      console.log("The batch order result is", batchOrderResult.body);
       const orderIds = batchOrderResult.body.map(
         (item: BatchOrder) => item.orderId as string
       );
@@ -298,7 +297,8 @@ export const CheckOrderSize = async (size: number, symbol: string) => {
 export const CanExecuteTrade = async (
   trade: OrderListElement,
   GateXTracker: Budget,
-  client: SpotApi
+  client: SpotApi,
+  telegramService?: TelegramService
 ) => {
   const result = await FetchBestOrderBookPrices(client);
   if (result === null) {
@@ -307,13 +307,12 @@ export const CanExecuteTrade = async (
   }
   const { ask } = result;
   const tradeCost = Number(trade.size) * Number(ask) * GATE_FEE; // Maker fee (0.06%)
-  console.log(tradeCost)
-  console.log( GateXTracker.dailySpent + tradeCost, GateXTracker.dailyLimit)
-  console.log( GateXTracker.monthlySpent + tradeCost ,GateXTracker.monthlyLimit)
   const canExecute =
     Number(GateXTracker.monthlySpent.toFixed(5)) + Number(tradeCost.toFixed(5)) <= Number(GateXTracker.monthlyLimit.toFixed(5));
   if (!canExecute) {
-    console.log(`Budget limit reached, skipping trade ${trade.size}`);
+    if (telegramService) {
+      await telegramService.sendBudgetAlert(GateXTracker);
+    }
     return false;
   }
   return true;
@@ -409,8 +408,8 @@ export const ProcessEachTradePair = async (
     }
 
     if (
-      (await CanExecuteTrade(buyOrder, tracker, client)) &&
-      (await CanExecuteTrade(sellOrder, tracker, client))
+      (await CanExecuteTrade(buyOrder, tracker, client, telegramService)) &&
+      (await CanExecuteTrade(sellOrder, tracker, client, telegramService))
     ) {
       console.log("Maker and Taker Trades are valid, creating orders");
     } else {

@@ -96,7 +96,6 @@ export class TelegramService {
       const sentMessage = await this.bot.sendMessage(this.chatId, message, {
         parse_mode: "HTML",
       });
-      console.log("Budget alert sent", sentMessage);
     } catch (err) {
       console.error("Error sending budget alert", err);
     }

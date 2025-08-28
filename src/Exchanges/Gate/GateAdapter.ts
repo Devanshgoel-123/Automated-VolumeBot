@@ -102,7 +102,7 @@ export class GateXAdapter implements ExchangeAdapter {
 
     if (telegramService) {
       await telegramService.sendAlert(
-        `KuCoin: Starting to process ${this.tracker.schedule.trades.length} trade pairs`
+        `GateX: Starting to process ${this.tracker.schedule.trades.length} trade pairs`
       );
     }
     for (const tradePair of this.tracker.schedule.trades) {
@@ -121,7 +121,7 @@ export class GateXAdapter implements ExchangeAdapter {
           this.isBotRunning,
           telegramService
         );
-      }, delay - 30000);
+      }, delay);
     }
   }
 

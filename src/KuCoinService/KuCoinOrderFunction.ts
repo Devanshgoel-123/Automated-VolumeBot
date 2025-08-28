@@ -17,6 +17,7 @@ import { LOGX_TICK_SIZE } from "../utils/constants";
 import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { TelegramService } from "../TelegramBot/index";
 import { CancelAllOrdersBySymbolReq } from "kucoin-universal-sdk/dist/generate/margin/order";
+import { GetOrderByClientOidReq } from "kucoin-universal-sdk/dist/generate/spot/order";
 config();
 
 /**
@@ -92,12 +93,15 @@ export const PlaceBatchOrder = async (
     if (!client) {
       throw new Error("Failed to initialize KuCoin client");
     }
-    //const cancelRequest = CancelAllOrdersBySymbolReq.builder().setSymbol(TRADE_PAIR_KUCOIN).build();
-  //  const cancelOrder = await client.cancelAllOrdersBySymbol(cancelRequest);
-  //  if(cancelOrder.data.length > 0){
-  //   console.log("Cancelled open orders", cancelOrder.data); 
-  //  }
-  console.log("Placing batched orders", orderList);
+    const cancelRequest = CancelAllOrdersBySymbolReq.builder().setSymbol(TRADE_PAIR_KUCOIN).build();
+   const cancelOrder = await client.cancelAllOrdersBySymbol(cancelRequest);
+   if(cancelOrder.commonResponse?.code !== "200000"){
+      console.error("Failed to cancel open orders");
+      await telegramService?.sendErrorAlert(
+        "KuCoi: Failed to cancel open orders"
+      )
+  }
+  // console.log("Placing batched orders", orderList);
     const request = Spot.Order.BatchAddOrdersReq.create({
       orderList: orderList.map((order) =>
         Spot.Order.BatchAddOrdersOrderList.create({
@@ -115,44 +119,48 @@ export const PlaceBatchOrder = async (
       ),
     });
     const batchOrderResult = await client.batchAddOrders(request);
-    console.log("Batch order result", batchOrderResult.data);
+   // console.log("Batch order result", batchOrderResult.data);
 
     batchOrderResult.data.map(
       async (item: BatchAddOrdersData, index: number) => {
-        if (item.success) {
+       // add timeout for 1 second
+       await new Promise(resolve => setTimeout(resolve, 2000));
+        const request = GetOrderByClientOidReq.builder()
+          .setClientOid(item.clientOid || '')
+          .setSymbol(TRADE_PAIR_KUCOIN)
+          .build();
+        const orderitem = await client.getOrderByClientOid(request);
+       // console.log("Order item", orderitem.toJson());
+        if(orderitem.remainFunds === "0" && orderitem.active === false){
           success = true;
-          const orderItem = orderList[index];
-          const tradeCost =
-            Number(orderItem.size) * Number(orderItem.price) * KUCOIN_FEE;
-          tracker.dailySpent += Number(tradeCost);
-          tracker.monthlySpent += Number(tradeCost);
+          // const orderItem = orderList[index];
+          const tradeCost = parseFloat(orderitem.fee);
+          tracker.dailySpent += tradeCost
+          tracker.monthlySpent += tradeCost;
           tracker.dailyTrades++;
-          tracker.dailyVolume +=
-            Number(orderItem.size) * Number(orderItem.price);
-
-          console.log("Inserting into tracker", tracker.dailySpent, tracker.monthlySpent, tracker.dailyTrades, tracker.dailyVolume);
-          const storeOrder = await InsertOrder({
-            clientOid: orderItem.clientOid,
-            symbol: orderItem.symbol,
-            type: orderItem.type.toString() as string,
-            side: orderItem.side.toString() as string,
-            price: orderItem.price,
-            size: orderItem.size,
-            exchangeName: KUCOIN_EXCHANGE_NAME,
-          });
-          if (storeOrder) {
-            console.log(
-              "Order placed and inserted into the database successfully",
-              storeOrder
-            );
-          } else {
-            console.error("Failed to store order", item);
-            if (telegramService) {
-              await telegramService.sendErrorAlert(
-                `KuCoin: Failed to store order ${orderItem.clientOid} in database`
-              );
-            }
-          }
+          tracker.dailyVolume += parseFloat(orderitem.dealFunds)
+          // const storeOrder = await InsertOrder({
+          //   clientOid: orderItem.clientOid,
+          //   symbol: orderItem.symbol,
+          //   type: orderItem.type.toString() as string,
+          //   side: orderItem.side.toString() as string,
+          //   price: orderItem.price,
+          //   size: orderItem.size,
+          //   exchangeName: KUCOIN_EXCHANGE_NAME,
+          // });
+          // if (storeOrder) {
+          //   console.log(
+          //     "Order placed and inserted into the database successfully",
+          //     storeOrder
+          //   );
+          // } else {
+          //   console.error("Failed to store order", item);
+          //   if (telegramService) {
+          //     await telegramService.sendErrorAlert(
+          //       `KuCoin: Failed to store order ${orderItem.clientOid} in database`
+          //     );
+          //   }
+          //}
         } else {
           success = false;
           if (telegramService) {
@@ -174,37 +182,6 @@ export const PlaceBatchOrder = async (
       );
     }
     return false;
-  }
-};
-
-/**
- * Get the order book for a given symbol
- * @param symbol - The symbol to get the order book for
- * @returns The order book for the given symbol
- */
-export const GetOrderBook = async () => {
-  try {
-    const client = await InitializeKuCoinClientMarket();
-    if (!client) {
-      throw new Error("Failed to initialize KuCoin client");
-    }
-    const request = Spot.Market.GetPartOrderBookReq.builder()
-      .setSize(ORDER_BOOK_SIZE)
-      .setSymbol(TRADE_PAIR_KUCOIN)
-      .build();
-    client
-      .getPartOrderBook(request)
-      .then((result) => {
-        console.log(
-          `Time: ${result.time}, Seq: ${result.sequence}, Bids: ${result.bids[0]}, Asks: ${result.asks[0]}`
-        );
-      })
-      .catch((err) => {
-        console.error("fail to get part order book", err);
-      });
-  } catch (error) {
-    console.error("Error getting order book", error);
-    return null;
   }
 };
 
@@ -242,7 +219,8 @@ export const FetchBestOrderBookPrices = async (client: MarketAPI) => {
 export const CanExecuteTrade = async (
   trade: OrderListElement,
   KuCoinTracker: Budget,
-  client: MarketAPI
+  client: MarketAPI,
+  telegramService?: TelegramService
 ) => {
   const result = await FetchBestOrderBookPrices(client);
   if (result === null) {
@@ -255,6 +233,9 @@ export const CanExecuteTrade = async (
     Number(KuCoinTracker.monthlySpent) + Number(tradeCost) <=
     Number(KuCoinTracker.monthlyLimit);
   if (!canExecute) {
+    if (telegramService) {
+      await telegramService.sendBudgetAlert(KuCoinTracker);
+    }
     console.log(`Budget limit reached, skipping trade ${trade.size}`);
     return false;
   }
@@ -338,7 +319,6 @@ export const ProcessEachTradePair = async (
   telegramService?: TelegramService
 ) => {
   if (!isBotRunning) {
-    console.log("Bot is stopped, skipping trade pair execution");
     return;
   }
   try {
@@ -366,7 +346,6 @@ export const ProcessEachTradePair = async (
     const orderList: OrderListElement[] = [];
     const isValid = await ValidateTrade(logxSize, buyPrice);
     if (!isValid) {
-      console.log("Trade is invalid, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
           `KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`
@@ -400,8 +379,8 @@ export const ProcessEachTradePair = async (
     }
 
     if (
-      !(await CanExecuteTrade(buyOrder, tracker, marketClient)) ||
-      !(await CanExecuteTrade(sellOrder, tracker, marketClient))
+      !(await CanExecuteTrade(buyOrder, tracker, marketClient, telegramService)) ||
+      !(await CanExecuteTrade(sellOrder, tracker, marketClient, telegramService))
     ) {
       console.error("Maker and Taker Trades are not valid, skipping");
       if (telegramService) {
@@ -421,9 +400,7 @@ export const ProcessEachTradePair = async (
         tracker,
         telegramService
       );
-      if (result) {
-        console.log("✅ Successfully placed batched orders");
-      } else {
+      if (!result) {
         console.error("Failed to place batched orders");
         if (telegramService) {
           await telegramService.sendErrorAlert(
