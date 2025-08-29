@@ -47,7 +47,6 @@ export const CreateLimitOrderStruct = async (
       size: size.toFixed(GATE_PRECISION),
       selfTradePrevention: "NO_STP",
     };
-    console.log("The Order list", orderList);
     return orderList;
   } catch (error) {
     console.error("Error placing limit order", error);
@@ -136,7 +135,6 @@ export const PlaceBatchOrder = async (
           if (
             orderStatus.response.status === 200 
           ) {
-            console.log("Order status", orderStatus);
             const order = orderList[0];
             const volume = Number(order.price) * Number(order.size);
             tracker.dailyVolume += Number(volume);
@@ -182,7 +180,6 @@ export const GetOrderBook = async (client: SpotApi) => {
     }
     const opts = {};
     const result = await client.listOrderBook(SYMBOL_DETAILS_GATE.symbol, opts);
-    console.log(result.body);
   } catch (error) {
     console.error("Error fetching order book on Gatex", error);
     return null;
@@ -332,17 +329,11 @@ export const ProcessEachTradePair = async (
       )
     );
     const sellPrice = Number(buyPrice);
-    // console.log("The best bid is", bestBid);
-    // console.log("The best ask is", bestAsk);
-    // console.log("The price is", buyPrice);
-    // console.log("The mid price is", midPrice);
     //Amount of LOGX tokens to buy and sell
     const logxSize = Math.round(usdtSize / buyPrice);
     const orderList: OrderListElement[] = [];
     const isValid = await ValidateTrade(logxSize, buyPrice);
-    // console.log("isValid", isValid);
     if (!isValid) {
-      // console.log("Trade is invalid, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
           `KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`

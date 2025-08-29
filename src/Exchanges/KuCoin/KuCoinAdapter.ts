@@ -132,7 +132,7 @@ export class KuCoinAdapter implements ExchangeAdapter {
           marketClient,
           telegramService
         );
-      }, delay-30000);
+      }, delay);
     }
   }
 
