@@ -26,7 +26,7 @@ export const MEXC_FEE = 0.0002;
 
 
 
-export const GATE_FEE=0.0002;
+export const GATE_FEE=0.00096;
 export const GATE_PRECISION=2;
 export const GATEX_LOGX_TICK_SIZE = 0.00001; 
 export const GATEX_TARGET_VOLUME = 10000;
@@ -36,7 +36,7 @@ export const SYMBOL_DETAILS_KUCOIN = {
   symbol: "LOGX-USDT",
   minOrderSize: 10, // 10 LOGX
   sizeIncrement: 0.1, // 0.1 LOGX
-  priceIncrement: 0.00005, // 0.00001 USDT
+  priceIncrement: 0.00001, // 0.00001 USDT
   minFunds: 0.1, // 0.1 USDT
   pricePrecision: 5, // 5 decimal places
 };
