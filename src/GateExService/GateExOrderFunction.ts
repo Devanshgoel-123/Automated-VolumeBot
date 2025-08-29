@@ -47,7 +47,6 @@ export const CreateLimitOrderStruct = async (
       size: size.toFixed(GATE_PRECISION),
       selfTradePrevention: "NO_STP",
     };
-    console.log("The Order list", orderList);
     return orderList;
   } catch (error) {
     console.error("Error placing limit order", error);
@@ -93,7 +92,6 @@ export const PlaceBatchOrder = async (
         "GateX: Failed to cancel open orders"
       );
     }
-    console.log("The cancel open orders result is", cancelOpenOrders.body);
     const orderListGateX: Order[] = orderList.map((order, index) => {
       const side = order.side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
       return {
@@ -107,44 +105,12 @@ export const PlaceBatchOrder = async (
         timeInForce: Order.TimeInForce.Gtc, 
       };
     });
-    // const side = orderList[0].side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
-    // const side2 = orderList[1].side === "BUY" ? Order.Side.Buy : Order.Side.Sell;
-    // const orderOneStruct:Order = {
-    //   currencyPair: SYMBOL_DETAILS_GATE.symbol,
-    //   side: side,
-    //   type:  Order.Type.Limit ,
-    //   amount: Number(orderList[0].size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
-    //   price:  Number(orderList[0].price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
-    //   text: `t-${orderList[0].clientOid}`,
-    //   timeInForce: Order.TimeInForce.Gtc,
-    // }
-    // const orderTwoStruct:Order = {
-    //   currencyPair: SYMBOL_DETAILS_GATE.symbol,
-    //   side: side2,
-    //   type:  Order.Type.Limit,
-    //   price: Number(orderList[1].price).toFixed(SYMBOL_DETAILS_GATE.pricePrecision),
-    //   amount: Number(orderList[1].size).toFixed(SYMBOL_DETAILS_GATE.sizePrecision),
-    //   text: `t-${orderList[0].clientOid}`,
-    //   timeInForce: Order.TimeInForce.Ioc,
-    // }
-    // const opts1 = {
-    //   xGateExptime: (new Date().getTime() + 60000).toString(),
-    // };
-    // const opts2 = {
-    //   xGateExptime: undefined,
-    // };
-    // const orderOne= await client.createOrder(orderOneStruct, opts1)
-    // await new Promise(resolve => setTimeout(resolve, 1000));
-    // const orderTwo= await client.createOrder(orderTwoStruct, opts2)
-    // console.log(orderOne.body)
-   // console.log(orderTwo.body)
+
     const batchOrderResult = await client.createBatchOrders(orderListGateX, {
-      xGateExptime: (new Date().getTime() + 60000).toString(),
+      xGateExptime: ((new Date().getTime()) + 60000).toString(),
     });
+   await new Promise(resolve => setTimeout(resolve, 10000));
     if (batchOrderResult.response.status === 200) {
-      const orderIds = batchOrderResult.body.map(
-        (item: BatchOrder) => item.orderId as string
-      );
       const opts = {};
       batchOrderResult.body.forEach(async (order:BatchOrder) => {
         try {
@@ -214,7 +180,6 @@ export const GetOrderBook = async (client: SpotApi) => {
     }
     const opts = {};
     const result = await client.listOrderBook(SYMBOL_DETAILS_GATE.symbol, opts);
-    console.log(result.body);
   } catch (error) {
     console.error("Error fetching order book on Gatex", error);
     return null;
@@ -364,17 +329,11 @@ export const ProcessEachTradePair = async (
       )
     );
     const sellPrice = Number(buyPrice);
-    // console.log("The best bid is", bestBid);
-    // console.log("The best ask is", bestAsk);
-    // console.log("The price is", buyPrice);
-    // console.log("The mid price is", midPrice);
     //Amount of LOGX tokens to buy and sell
     const logxSize = Math.round(usdtSize / buyPrice);
     const orderList: OrderListElement[] = [];
     const isValid = await ValidateTrade(logxSize, buyPrice);
-    // console.log("isValid", isValid);
     if (!isValid) {
-      // console.log("Trade is invalid, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
           `KuCoin: Trade validation failed - Size: ${logxSize}, Price: ${buyPrice}`
@@ -423,7 +382,6 @@ export const ProcessEachTradePair = async (
     orderList.push(sellOrder);
 
     if (orderList.length === 2) {
-      console.log("Placing batched orders", orderList);
       // 3. Place both together as a batch
       const result = await PlaceBatchOrder(
         orderList,
@@ -431,13 +389,11 @@ export const ProcessEachTradePair = async (
         tracker,
         telegramService
       );
-      if (result) {
-        console.log("✅ Successfully placed batched orders");
-      } else {
-        console.error("Failed to place batched orders");
+      if (!result) {
+        console.error("GateX: Failed to place batched orders");
         if (telegramService) {
           await telegramService.sendErrorAlert(
-            "KuCoin: Failed to place batched orders"
+            "GateX: Failed to place batched orders"
           );
         }
         return;
@@ -448,7 +404,7 @@ export const ProcessEachTradePair = async (
       );
       if (telegramService) {
         await telegramService.sendErrorAlert(
-          `KuCoin: Only ${orderList.length} valid orders created, skipping trade pair`
+          `Gatex: Only ${orderList.length} valid orders created, skipping trade pair`
         );
       }
     }
@@ -456,7 +412,7 @@ export const ProcessEachTradePair = async (
     console.error("Error executing trade:", JSON.stringify(err.data));
     if (telegramService) {
       await telegramService.sendErrorAlert(
-        `KuCoin: Error executing trade - ${err.message || "Unknown error"}`
+        `Gatex: Error executing trade - ${err.message || "Unknown error"}`
       );
     }
   }

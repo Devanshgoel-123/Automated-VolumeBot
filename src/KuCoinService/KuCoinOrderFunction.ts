@@ -57,7 +57,7 @@ export const CreateLimitOrderStruct = async (
       SYMBOL_DETAILS_KUCOIN.priceIncrement;
     const formattedSize = Math.round(size / 0.1) * 0.1;
     const currentTime = new Date().getTime();
-    const clientOid = `${currentTime}_${side}_maker`;
+    const clientOid = `${currentTime}_${side}_maker_1`;
     const orderList: OrderListElement = {
       clientOid,
       symbol,
@@ -100,8 +100,7 @@ export const PlaceBatchOrder = async (
       await telegramService?.sendErrorAlert(
         "KuCoi: Failed to cancel open orders"
       )
-  }
-  // console.log("Placing batched orders", orderList);
+    }
     const request = Spot.Order.BatchAddOrdersReq.create({
       orderList: orderList.map((order) =>
         Spot.Order.BatchAddOrdersOrderList.create({
@@ -114,17 +113,17 @@ export const PlaceBatchOrder = async (
               : BatchAddOrdersOrderList.SideEnum.SELL,
           price: order.price,
           size: order.size,
-          cancelAfter: 60,
+          cancelAfter: 20,
         })
       ),
     });
+
     const batchOrderResult = await client.batchAddOrders(request);
-   // console.log("Batch order result", batchOrderResult.data);
 
     batchOrderResult.data.map(
       async (item: BatchAddOrdersData, index: number) => {
-       // add timeout for 1 second
-       await new Promise(resolve => setTimeout(resolve, 2000));
+       // add timeout for 5 second
+       await new Promise(resolve => setTimeout(resolve,5000));
         const request = GetOrderByClientOidReq.builder()
           .setClientOid(item.clientOid || '')
           .setSymbol(TRADE_PAIR_KUCOIN)
@@ -133,39 +132,16 @@ export const PlaceBatchOrder = async (
        // console.log("Order item", orderitem.toJson());
         if(orderitem.remainFunds === "0" && orderitem.active === false){
           success = true;
-          // const orderItem = orderList[index];
           const tradeCost = parseFloat(orderitem.fee);
           tracker.dailySpent += tradeCost
           tracker.monthlySpent += tradeCost;
           tracker.dailyTrades++;
           tracker.dailyVolume += parseFloat(orderitem.dealFunds)
-          // const storeOrder = await InsertOrder({
-          //   clientOid: orderItem.clientOid,
-          //   symbol: orderItem.symbol,
-          //   type: orderItem.type.toString() as string,
-          //   side: orderItem.side.toString() as string,
-          //   price: orderItem.price,
-          //   size: orderItem.size,
-          //   exchangeName: KUCOIN_EXCHANGE_NAME,
-          // });
-          // if (storeOrder) {
-          //   console.log(
-          //     "Order placed and inserted into the database successfully",
-          //     storeOrder
-          //   );
-          // } else {
-          //   console.error("Failed to store order", item);
-          //   if (telegramService) {
-          //     await telegramService.sendErrorAlert(
-          //       `KuCoin: Failed to store order ${orderItem.clientOid} in database`
-          //     );
-          //   }
-          //}
         } else {
           success = false;
           if (telegramService) {
             await telegramService.sendErrorAlert(
-              `KuCoin: Order ${orderList[index]?.clientOid} failed to place`
+              `KuCoin: Failed to fulfill the order ${orderitem.clientOid} but placed successfully, Funds: ${orderitem.remainFunds}`
             );
           }
         }
@@ -176,9 +152,7 @@ export const PlaceBatchOrder = async (
     console.error("Error placing limit order", JSON.stringify(error));
     if (telegramService) {
       await telegramService.sendErrorAlert(
-        `KuCoin: Error placing batch orders - ${
-          error.message || "Unknown error"
-        }`
+        `KuCoin: Error placing batch orders`
       );
     }
     return false;
@@ -336,7 +310,9 @@ export const ProcessEachTradePair = async (
     // Target Volume is distributed into multiple sub orders volume
     const usdtSize = tradePair[0].size;
     const bestBid = parseFloat(book.bid);
-    const buyPrice = bestBid + (LOGX_TICK_SIZE);
+    const bestAsk = parseFloat(book.ask);
+    const midPrice = Math.round(((bestBid + bestAsk) / 2) / SYMBOL_DETAILS_KUCOIN.priceIncrement) * SYMBOL_DETAILS_KUCOIN.priceIncrement;
+    const buyPrice = midPrice + (LOGX_TICK_SIZE);
     const sellPrice = buyPrice;
 
     //Amount of LOGX tokens to buy and sell

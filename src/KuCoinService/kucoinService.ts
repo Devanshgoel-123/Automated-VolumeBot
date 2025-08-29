@@ -28,8 +28,8 @@ export const InitializeKuCoinClientMarket= async():Promise<MarketAPI | null> =>{
         .setMaxIdleConns(10)
         .build();
 
-    // Create a client using the specified options
-    const clientOption = new ClientOptionBuilder()
+      // Create a client using the specified options
+      const clientOption = new ClientOptionBuilder()
         .setKey(KUCOIN_API_KEY)
         .setSecret(KUCOIN_API_SECRET)
         .setPassphrase(KUCOIN_API_PASSPHRASE)
@@ -39,15 +39,15 @@ export const InitializeKuCoinClientMarket= async():Promise<MarketAPI | null> =>{
         .setTransportOption(httpTransportOption)
         .build();
 
-        const client = new DefaultClient(clientOption);
-        const kucoinRestService = client.restService();
-        const spotMarketApi = kucoinRestService.getSpotService().getMarketApi();
-        return spotMarketApi;
-    }catch(error){
-        console.error("Error initializing KuCoin client",error);
-        return null;
+      const client = new DefaultClient(clientOption);
+      const kucoinRestService = client.restService();
+      const spotMarketApi = kucoinRestService.getSpotService().getMarketApi();
+      return spotMarketApi;
+    } catch (error) {
+      console.error("Error initializing KuCoin client", error);
+      return null;
     }
-}
+  };
 
 /**
  * Initialize the KuCoin client for order Data
@@ -64,8 +64,8 @@ export const InitializeKuCoinClientSpot= async():Promise<OrderAPI | null> =>{
         .setMaxIdleConns(10)
         .build();
 
-    // Create a client using the specified options
-    const clientOption = new ClientOptionBuilder()
+      // Create a client using the specified options
+      const clientOption = new ClientOptionBuilder()
         .setKey(KUCOIN_API_KEY)
         .setSecret(KUCOIN_API_SECRET)
         .setPassphrase(KUCOIN_API_PASSPHRASE)
@@ -75,14 +75,12 @@ export const InitializeKuCoinClientSpot= async():Promise<OrderAPI | null> =>{
         .setTransportOption(httpTransportOption)
         .build();
 
-        const client = new DefaultClient(clientOption);
-        const kucoinRestService = client.restService();
-        const spotMarketApi = kucoinRestService.getSpotService().getOrderApi();
-        return spotMarketApi;
-    }catch(error){
-        console.error("Error initializing KuCoin client",error);
-        return null;
+      const client = new DefaultClient(clientOption);
+      const kucoinRestService = client.restService();
+      const spotMarketApi = kucoinRestService.getSpotService().getOrderApi();
+      return spotMarketApi;
+    } catch (error) {
+      console.error("Error initializing KuCoin client", error);
+      return null;
     }
-}
-
-
+  };

@@ -60,9 +60,9 @@ app.post("/setBudget",checkPassword, async (req, res) => {
       return res.status(400).send("Missing required fields");
     }
     if(exchangeName === KUCOIN_EXCHANGE_NAME){
-      await kuCoinAdapter.setBudget(monthlyLimit);
+      await kuCoinAdapter.setBudget(Number(monthlyLimit));
     }else if(exchangeName === GATEX_EXCHANGE_NAME){
-      await gateXAdapter.setBudget(monthlyLimit);
+      await gateXAdapter.setBudget(Number(monthlyLimit));
     }else{
       return res.status(400).send("Invalid exchange name");
     }
