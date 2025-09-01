@@ -16,28 +16,20 @@ export class VolumeBot {
 
   async start() {
     console.log("Starting Volume Bot...");
-    await this.telegramService.sendAlert("Volume Bot is starting up!");
+    await this.telegramService.sendAlert("Volume Bot is starting up for " + this.adapter.exchangeName + "!");
 
     try {
       await this.adapter.initializeStats();
       await this.adapter.initializeClients();
 
       await this.telegramService.sendAlert(
-        `📊 Bot initialized with ${this.adapter.tracker.schedule.trades.length} trade pairs scheduled`
+        `📊 Bot initialized with ${this.adapter.tracker.schedule.trades.length} trade pairs scheduled` + this.adapter.exchangeName
       );
 
       await this.adapter.processTrades(this.telegramService);
 
-      cron.schedule("0 0 * * *", async () => {
+      cron.schedule("0 */3 * * *", async () => {
         try {
-          console.log(
-            "The tracker is",
-            this.adapter.tracker.dailyLimit,
-            this.adapter.tracker.dailyVolume,
-            this.adapter.tracker.dailyTrades,
-            this.adapter.tracker.dailySpent
-          );
-
           // Send stats
           await this.telegramService.sendDailyStats({
             totalTrades: this.adapter.tracker.dailyTrades,
@@ -47,7 +39,7 @@ export class VolumeBot {
             exchangeName: this.adapter.exchangeName,
           });
 
-          // Save to DB
+         
           await UpdateDailyStats({
             date: new Date().toISOString().split("T")[0],
             totalVolume: this.adapter.tracker.dailyVolume,
@@ -58,7 +50,7 @@ export class VolumeBot {
           const now = new Date();
           if (now.getUTCHours() === 0) {
             ResetDailyCounter(this.adapter.tracker);
-            await this.telegramService.sendAlert("Daily counters reset - new trading day started!");
+            await this.telegramService.sendAlert("Daily counters reset - new trading day started for " + this.adapter.exchangeName + "!");
           }
         } catch (error) {
           console.error("Error sending daily stats", error);

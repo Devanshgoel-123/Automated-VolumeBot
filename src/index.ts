@@ -39,11 +39,28 @@ app.get("/", (req, res) => {
  */
 app.post("/startBot",checkPassword, async (req, res) => {
   try {
+    const { exchangeName } = req.body;
+    if (!exchangeName) {
+      return res.status(400).send("Missing exchangeName in request body");
+    }
     await telegramService.sendAlert("🤖 Bot starting via API request");
-    await kuCoinBot.start();
-    activeBots.push(kuCoinBot);
-    await gateXBot.start();
-    activeBots.push(gateXBot);
+    if(exchangeName === KUCOIN_EXCHANGE_NAME){
+      if(activeBots.find((bot) => bot.adapter.exchangeName === KUCOIN_EXCHANGE_NAME)){
+        return res.status(400).send("Bot already started");
+      }else{
+        await kuCoinBot.start();
+        activeBots.push(kuCoinBot);
+      }
+    }else if(exchangeName === GATEX_EXCHANGE_NAME){
+      if(activeBots.find((bot) => bot.adapter.exchangeName === GATEX_EXCHANGE_NAME)){
+        return res.status(400).send("Bot already started");
+      }else{
+        await gateXBot.start();
+        activeBots.push(gateXBot);
+      }
+    }else{
+      return res.status(400).send("Invalid exchange name");
+    }
     res.status(200).send("Bot started successfully");
   } catch (err) {
     console.error("Error starting bot", err);
@@ -84,16 +101,22 @@ app.post("/setBudget",checkPassword, async (req, res) => {
  */
 app.post("/terminate",checkPassword, async (req, res) => {
   try {
-    console.log("🛑 Terminating bot via API request...");
+    const { exchangeName } = req.body;
+    if(!exchangeName){
+      return res.status(400).send("Missing exchangeName in request body");
+    }
+    if(exchangeName === KUCOIN_EXCHANGE_NAME){
+      await kuCoinAdapter.stopBot();
+      activeBots.splice(activeBots.indexOf(kuCoinBot), 1);
+    }else if(exchangeName === GATEX_EXCHANGE_NAME){
+      await gateXAdapter.stopBot();
+      activeBots.splice(activeBots.indexOf(gateXBot), 1);
+    }else{
+      return res.status(400).send("Invalid exchange name");
+    }
     await telegramService.sendAlert(
       "🛑 Bot termination initiated via API request"
     );
-
-    // Stop the bot from processing new trade
-    await kuCoinAdapter.stopBot();
-    activeBots.splice(activeBots.indexOf(kuCoinBot), 1);
-    await gateXAdapter.stopBot();
-    activeBots.splice(activeBots.indexOf(gateXBot), 1);
 
     await telegramService.sendAlert(
       "Bot terminated successfully - all pending orders cancelled"
@@ -152,6 +175,21 @@ app.get("/status", (req, res) => {
       testTelegram: "POST /testTelegram",
     },
   });
+});
+
+
+app.get("/stats", ( req, res) => {
+  try{
+    res.status(200).json({
+      stats: {
+        kuCoin: kuCoinBot.adapter.tracker,
+        gateX: gateXBot.adapter.tracker,
+      },
+    });
+  }catch(err){
+    console.error("Error fetching stats", err);
+    res.status(500).send("Error fetching stats");
+  }
 });
 
 

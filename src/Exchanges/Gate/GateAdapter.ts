@@ -96,7 +96,9 @@ export class GateXAdapter implements ExchangeAdapter {
       spotClient === undefined ||
       this.isBotRunning === false
     ) {
-      console.log("Error 2");
+      await telegramService?.sendErrorAlert(
+        "The spot client is not initialized returning null for GateX"
+      );
       throw new Error("The spot client is not initialized returning null");
     }
 
@@ -130,7 +132,7 @@ export class GateXAdapter implements ExchangeAdapter {
   }
 
   async stopBot(): Promise<void> {
-    console.log("Stopping the bot");
+    console.log("Stopping the bot for GateX");
     const result = await UpdateDailyStats({
       date: new Date().toISOString().split("T")[0],
       exchangeName: this.exchangeName,

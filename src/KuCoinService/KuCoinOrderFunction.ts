@@ -18,6 +18,7 @@ import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
 import { TelegramService } from "../TelegramBot/index";
 import { CancelAllOrdersBySymbolReq } from "kucoin-universal-sdk/dist/generate/margin/order";
 import { GetOrderByClientOidReq } from "kucoin-universal-sdk/dist/generate/spot/order";
+import { toTwoDecimals } from "../utils/functions";
 config();
 
 /**
@@ -129,14 +130,14 @@ export const PlaceBatchOrder = async (
           .setSymbol(TRADE_PAIR_KUCOIN)
           .build();
         const orderitem = await client.getOrderByClientOid(request);
-       // console.log("Order item", orderitem.toJson());
-        if(orderitem.remainFunds === "0" && orderitem.active === false){
+        if(orderitem.remainFunds === "0" && orderitem.active === false ){
           success = true;
-          const tradeCost = parseFloat(orderitem.fee);
+          const volume = toTwoDecimals(parseFloat(orderitem.dealFunds));
+          const tradeCost = toTwoDecimals(parseFloat(orderitem.fee));
           tracker.dailySpent += tradeCost
           tracker.monthlySpent += tradeCost;
           tracker.dailyTrades++;
-          tracker.dailyVolume += parseFloat(orderitem.dealFunds)
+          tracker.dailyVolume += volume;     
         } else {
           success = false;
           if (telegramService) {
@@ -198,7 +199,9 @@ export const CanExecuteTrade = async (
 ) => {
   const result = await FetchBestOrderBookPrices(client);
   if (result === null) {
-    console.log("Failed to fetch best order book prices");
+    await telegramService?.sendErrorAlert(
+      "KuCoin: Failed to fetch best order book prices"
+    );
     return false;
   }
   const { ask } = result;

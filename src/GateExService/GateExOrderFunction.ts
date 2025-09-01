@@ -11,6 +11,7 @@ import { Budget } from "../utils/types";
 import { TelegramService } from "../TelegramBot";
 import { Trade } from "../utils/types";
 import { BatchOrder } from "gate-api";
+import { toTwoDecimals } from "../utils/functions";
 /**
  * Create a limit order
  * @param size - The size of the order
@@ -57,7 +58,7 @@ export const CreateLimitOrderStruct = async (
 /**
  * Place a batch of orders
  * @param orderList - The list of orders to place
- * @param client - The KuCoin client
+ * @param client - The Gatex client
  * @param tracker - The budget tracker
  * @param telegramService - The telegram service for notifications
  * @returns The result of the batch order placement
@@ -126,24 +127,25 @@ export const PlaceBatchOrder = async (
             );
             return;
           }
-          if(order.message === "Insufficient funds"){
+        
           const orderStatus = await client.getOrder(
             order.id as string,
             SYMBOL_DETAILS_GATE.symbol,
             opts
           );
           if (
-            orderStatus.response.status === 200 
+            orderStatus.response.status === 200
           ) {
-            const order = orderList[0];
-            const volume = Number(order.price) * Number(order.size);
-            tracker.dailyVolume += Number(volume);
-            tracker.dailyTrades += orderList.length;
-            tracker.dailySpent += Number(volume * GATE_FEE);
-            tracker.monthlySpent  += Number(volume * GATE_FEE);
-            tracker.monthlyTrades += orderList.length;
+            const volume = Number(orderStatus.body.price) * Number(orderStatus.body.filledAmount);
+            tracker.dailyVolume += toTwoDecimals(volume);
+            tracker.dailyTrades +=1;
+            const feeCurrencyMultiplier= orderStatus.body.feeCurrency === "LOGX" ? Number(orderStatus.body.avgDealPrice) : 1;
+            const OrderFees = Number(orderStatus.body.fee) * Number(feeCurrencyMultiplier);
+            tracker.dailySpent += toTwoDecimals(OrderFees);
+            tracker.monthlySpent  += toTwoDecimals(OrderFees);
+            tracker.monthlyTrades += 1;
           }
-        }
+
         } catch (error) {
           console.error("Error getting order status");
           await telegramService?.sendErrorAlert(
@@ -209,8 +211,6 @@ export const FetchBestOrderBookPrices = async (
 
     const ask = result.body.asks[0];
     const bid = result.body.bids[0];
-    // console.log("The ask is", ask);
-    // console.log("The bid is", bid);
     return {
       ask: ask[0],
       bid: bid[0],
@@ -310,7 +310,7 @@ export const ProcessEachTradePair = async (
       console.error("⚠️ Failed to fetch order book, skipping trade");
       if (telegramService) {
         await telegramService.sendErrorAlert(
-          "KuCoin: Failed to fetch order book, skipping trade"
+          "GateX: Failed to fetch order book, skipping trade"
         );
       }
       return;
@@ -360,7 +360,7 @@ export const ProcessEachTradePair = async (
       // console.error("Failed to create orders, skipping");
       if (telegramService) {
         await telegramService.sendErrorAlert(
-          "KuCoin: Failed to create buy/sell orders"
+          "GateX: Failed to create buy/sell orders"
         );
       }
       return;

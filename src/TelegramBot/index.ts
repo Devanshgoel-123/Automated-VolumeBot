@@ -45,6 +45,7 @@ export class TelegramService {
   async sendDailyStats(stats: DailyStats) {
     try {
       const message = `
+      Exchange Name: ${stats.exchangeName}
  <b>Daily Stats Report</b>
  <b>Total Trades:</b> ${stats.totalTrades || 0}
  <b>Total Volume:</b> ${stats.totalVolume || 0}

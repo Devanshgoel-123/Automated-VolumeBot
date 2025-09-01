@@ -80,3 +80,8 @@ export const generateDailySchedule = (exchangeName: string) => {
     normalizedUsdtValues,
   };
 };
+
+
+export function toTwoDecimals(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
