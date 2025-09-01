@@ -9,12 +9,12 @@ import {
   ValidateTrade,
   PlaceBatchOrder,
 } from "../../KuCoinService/KuCoinOrderFunction";
+import { UpdateDailyStats } from "../../db/stats";
 import { OrderListElement, Budget, Trade } from "../../utils/types";
 import { ProcessEachTradePair } from "../../KuCoinService/KuCoinOrderFunction";
 import { generateDailySchedule } from "../../utils/functions";
 import { OrderAPI } from "kucoin-universal-sdk/dist/generate/spot/order";
 import { MarketAPI } from "kucoin-universal-sdk/dist/generate/spot/market";
-import { BatchAddOrdersOrderList } from "kucoin-universal-sdk/dist/generate/spot/order";
 import { TelegramService } from "../../TelegramBot/index";
 import { KUCOIN_EXCHANGE_NAME, TRADE_PAIR_KUCOIN } from "../../utils/constants";
 import { GetTodaysStats } from "../../db/stats";
@@ -140,7 +140,15 @@ export class KuCoinAdapter implements ExchangeAdapter {
     return generateDailySchedule(this.exchangeName);
   }
 
-  stopBot(): Promise<void> {
+  async stopBot(): Promise<void> {
+    console.log("Stopping the bot for KuCoin");
+   const result = await UpdateDailyStats({
+      date: new Date().toISOString().split("T")[0],
+      exchangeName: this.exchangeName,
+      totalVolume: this.tracker.dailyVolume,
+      totalTrades: this.tracker.dailyTrades,
+      totalFees: this.tracker.dailySpent,
+    });
     this.isBotRunning = false;
     return Promise.resolve();
   }
