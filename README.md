@@ -49,6 +49,36 @@ The bot sends various types of notifications to your Telegram channel:
 
 ## 🏗️ Architecture
 
+```mermaid
+flowchart TB
+    Op["Operator"] -->|"POST /startBot · /setBudget · /terminate<br/>(password-protected)"| API["Express control API<br/>GET /status · /stats"]
+
+    API --> KB["VolumeBot (KuCoin)"]
+    API --> GB["VolumeBot (Gate.io)"]
+
+    subgraph Core["Bot core"]
+        KB & GB --> IF[["ExchangeAdapter interface<br/>fetchBestPrices · validateTrade<br/>createLimitOrder · createBatchOrder<br/>processTrades"]]
+        IF --> KA["KuCoinAdapter<br/>kucoin-universal-sdk"]
+        IF --> GA["GateAdapter<br/>gate-api"]
+        IF -.-> MA["MexC adapter (in progress)"]
+        Tr["Budget tracker<br/>daily trades · volume · fees"]
+    end
+
+    KA --> KC["KuCoin"]
+    GA --> GT["Gate.io"]
+    KB & GB --> Tr
+    Cron["node-cron every 3h<br/>stats + UTC-midnight reset"] --> Tr
+    Tr --> DB[("Neon PostgreSQL<br/>Drizzle: orders · daily_stats")]
+    KB & GB & Cron --> TS["TelegramService<br/>trade · budget · error alerts<br/>daily reports"]
+
+    subgraph Deploy["Delivery"]
+        CB["AWS CodeBuild"] --> ECR["Amazon ECR<br/>Docker image"]
+    end
+```
+
+The ASCII sketch below is the original high-level view:
+
+
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   VolumeBot     │───▶│  ExchangeAdapter │───▶│   Exchange      │
